@@ -246,6 +246,38 @@ export function buildTraceInsights(report, anomalyResult, health) {
   };
 }
 
+export function buildTraceTriagePlan(report, anomalyResult, health) {
+  const insights = buildTraceInsights(report, anomalyResult, health);
+  const actions = [];
+
+  if (insights.status === "critical") {
+    actions.push("Immediately inspect failed events and tool/model error payloads for root cause.");
+  }
+
+  if ((insights.bottleneckStage?.durationMs ?? 0) > 0) {
+    actions.push(`Investigate bottleneck stage '${insights.bottleneckStage.stage}' for latency sources.`);
+  }
+
+  for (const issue of insights.topIssues) {
+    if (issue.code === "RETRY_COUNT_HIGH") {
+      actions.push("Review retry policy and transient upstream dependencies.");
+    } else if (issue.code === "FALLBACK_COUNT_HIGH") {
+      actions.push("Improve research query quality and source coverage.");
+    } else if (issue.code === "FAILED_EVENTS_PRESENT") {
+      actions.push("Escalate failure investigation before new feature rollout.");
+    }
+  }
+
+  const dedupedActions = Array.from(new Set(actions));
+  return {
+    status: insights.status,
+    score: insights.score,
+    priority: insights.status === "critical" ? "high" : insights.status === "degraded" ? "medium" : "low",
+    topIssues: insights.topIssues,
+    actions: dedupedActions
+  };
+}
+
 function sortEvents(events = []) {
   const safeEvents = Array.isArray(events) ? events : [];
   return [...safeEvents].sort((a, b) => {

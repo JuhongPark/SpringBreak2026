@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildTraceInsights,
   buildTraceSnapshot,
+  buildTraceTriagePlan,
   buildTraceReport,
   detectTraceAnomalies,
   evaluateTraceHealth,
@@ -227,4 +228,27 @@ test("buildTraceInsights returns bottleneck stage and failure rate", () => {
   assert.equal(insights.failureRate, 0.25);
   assert.equal(insights.bottleneckStage.stage, "composition");
   assert.equal(insights.topIssues.length, 2);
+});
+
+test("buildTraceTriagePlan returns priority and actionable steps", () => {
+  const report = {
+    summary: { totalEvents: 8, failedEvents: 2 },
+    stageBreakdown: {
+      research: { durationMs: 1200 },
+      composition: { durationMs: 3000 }
+    }
+  };
+  const anomalyResult = {
+    anomalies: [
+      { code: "FAILED_EVENTS_PRESENT", severity: "critical", message: "failed events found" },
+      { code: "RETRY_COUNT_HIGH", severity: "warning", message: "retry high" }
+    ]
+  };
+  const health = { status: "critical", score: 40 };
+
+  const plan = buildTraceTriagePlan(report, anomalyResult, health);
+  assert.equal(plan.priority, "high");
+  assert.equal(plan.topIssues.length, 2);
+  assert.ok(plan.actions.some((text) => text.includes("Immediately inspect failed events")));
+  assert.ok(plan.actions.some((text) => text.includes("bottleneck stage")));
 });
