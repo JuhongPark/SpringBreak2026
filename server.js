@@ -299,6 +299,31 @@ app.get("/api/traces/:traceId/report", async (req, res) => {
   }
 });
 
+app.get("/api/traces/:traceId/stage-breakdown", async (req, res) => {
+  const { traceId } = req.params;
+  if (!traceId) {
+    return res.status(400).json({ error: "traceId is required" });
+  }
+
+  try {
+    const events = await traceStore.read(traceId);
+    const report = buildTraceReport(events);
+    res.json({
+      traceId,
+      stageBreakdown: report.stageBreakdown,
+      stageDurationsMs: report.stageDurationsMs
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return res.status(404).json({ error: "Trace not found" });
+    }
+    res.status(500).json({
+      error: "Failed to build stage breakdown",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
 app.get("/api/traces/:traceId/anomalies", async (req, res) => {
   const { traceId } = req.params;
   if (!traceId) {

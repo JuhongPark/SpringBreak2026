@@ -62,6 +62,7 @@ export function buildTraceReport(events = []) {
   const sorted = sortEvents(events);
   const summary = summarizeTrace(sorted);
   const stageDurationsMs = buildStageDurations(sorted);
+  const stageBreakdown = buildStageBreakdown(sorted);
   const retryCount = summary.typeCounts.retry_started ?? 0;
   const fallbackCount = summary.typeCounts.fallback_triggered ?? 0;
   const failedEventTypes = Array.from(
@@ -75,6 +76,7 @@ export function buildTraceReport(events = []) {
   return {
     summary,
     stageDurationsMs,
+    stageBreakdown,
     retryCount,
     fallbackCount,
     failedEventTypes,
@@ -231,6 +233,51 @@ function buildStageDurations(sorted = []) {
 
   return Object.fromEntries(
     [...stageWindow.entries()].map(([stage, window]) => [stage, Math.max(0, window.last - window.first)])
+  );
+}
+
+function buildStageBreakdown(sorted = []) {
+  const stageMap = new Map();
+  for (const event of sorted) {
+    const stage = event?.stage || "general";
+    const status = event?.status || "unknown";
+    const ts = Date.parse(event?.timestamp || "");
+
+    if (!stageMap.has(stage)) {
+      stageMap.set(stage, {
+        eventCount: 0,
+        failedEventCount: 0,
+        statusCounts: {},
+        firstTs: Number.isFinite(ts) ? ts : null,
+        lastTs: Number.isFinite(ts) ? ts : null
+      });
+    }
+
+    const slot = stageMap.get(stage);
+    slot.eventCount += 1;
+    slot.statusCounts[status] = (slot.statusCounts[status] || 0) + 1;
+
+    if (status === "failed" || String(event?.type || "").endsWith("_failed")) {
+      slot.failedEventCount += 1;
+    }
+
+    if (Number.isFinite(ts)) {
+      slot.firstTs = slot.firstTs == null ? ts : Math.min(slot.firstTs, ts);
+      slot.lastTs = slot.lastTs == null ? ts : Math.max(slot.lastTs, ts);
+    }
+  }
+
+  return Object.fromEntries(
+    [...stageMap.entries()].map(([stage, slot]) => [
+      stage,
+      {
+        eventCount: slot.eventCount,
+        failedEventCount: slot.failedEventCount,
+        statusCounts: slot.statusCounts,
+        durationMs:
+          slot.firstTs != null && slot.lastTs != null ? Math.max(0, slot.lastTs - slot.firstTs) : null
+      }
+    ])
   );
 }
 

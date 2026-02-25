@@ -193,6 +193,14 @@ Use this checklist in each iteration review:
 - `references/implementation_cycle9/06_assumption_register.md`
 - `references/implementation_cycle9/07_evaluation_report.md`
 - `references/implementation_cycle9/08_iteration_log.md`
+- `references/implementation_cycle10/01_baseline_audit.md`
+- `references/implementation_cycle10/02_market_research.md`
+- `references/implementation_cycle10/03_best_ideas_mapping.md`
+- `references/implementation_cycle10/04_success_criteria.md`
+- `references/implementation_cycle10/05_execution_plan.md`
+- `references/implementation_cycle10/06_assumption_register.md`
+- `references/implementation_cycle10/07_evaluation_report.md`
+- `references/implementation_cycle10/08_iteration_log.md`
 
 The app:
 
@@ -296,6 +304,8 @@ Open:
   - Returns aggregated trace diagnostics (event counts, status counts, failures, duration)
 - `GET /api/traces/:traceId/report`
   - Returns stage-level durations, critical events, and failure-oriented trace diagnostics
+- `GET /api/traces/:traceId/stage-breakdown`
+  - Returns per-stage event counts, failure counts, status distribution, and stage durations
 - `GET /api/traces/:traceId/anomalies`
   - Returns threshold-based anomaly diagnostics derived from trace report metrics
   - Supports optional profile presets: `profile=strict|default|lenient`

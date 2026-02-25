@@ -75,6 +75,10 @@ test("buildTraceReport computes stage durations and critical events", () => {
   assert.ok(report.criticalEvents.some((event) => event.type === "retry_started"));
   assert.equal(report.retryCount, 1);
   assert.equal(report.fallbackCount, 0);
+  assert.equal(report.stageBreakdown.research.eventCount, 2);
+  assert.equal(report.stageBreakdown.research.failedEventCount, 1);
+  assert.equal(report.stageBreakdown.research.statusCounts.retrying, 1);
+  assert.equal(report.stageBreakdown.research.statusCounts.failed, 1);
 });
 
 test("detectTraceAnomalies flags retries, failures, and long stages", () => {
