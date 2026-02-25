@@ -3,23 +3,27 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
+import { mkdir, appendFile, readFile } from "fs/promises";
 import {
   buildItineraryDraft,
   createFinalReview,
   validateTripRequest,
   TRIP_COMPONENTS
 } from "./src/agents/tripPlanner.js";
+import { isConfirmationConflict } from "./src/agents/failurePolicies.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 const port = Number(process.env.PORT || 3000);
+const logsDir = path.join(__dirname, "data", "logs");
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 const itineraryStore = new Map();
+void mkdir(logsDir, { recursive: true });
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "spring-break-trip-agent" });
@@ -77,10 +81,13 @@ app.post("/api/plan-stream", async (req, res) => {
     responseClosed = true;
   });
 
+  const traceId = randomUUID();
   const pushEvent = (eventName, payload) => {
     if (responseClosed) return;
+    const normalized = normalizeTraceEvent(traceId, payload);
+    void appendTraceEvent(normalized);
     res.write(`event: ${eventName}\n`);
-    res.write(`data: ${JSON.stringify(payload)}\n\n`);
+    res.write(`data: ${JSON.stringify(normalized)}\n\n`);
   };
 
   try {
@@ -88,6 +95,7 @@ app.post("/api/plan-stream", async (req, res) => {
     pushEvent("activity", {
       type: "planning_started",
       stage: "initialization",
+      status: "started",
       message: "Trip planning request accepted."
     });
 
@@ -95,17 +103,27 @@ app.post("/api/plan-stream", async (req, res) => {
       onEvent: (event) => pushEvent("activity", event)
     });
 
-    const itineraryId = storeItineraryRecord(preferences, itineraryDraft);
+    const itineraryId = storeItineraryRecord(preferences, itineraryDraft, traceId);
     pushEvent("result", {
+      type: "planning_result",
+      stage: "finalization",
+      status: "completed",
       itineraryId,
+      traceId,
       itinerary: itineraryDraft,
       nextComponentToConfirm: nextComponentToConfirm(itineraryStore.get(itineraryId).confirmations)
     });
     pushEvent("done", {
+      type: "stream_done",
+      stage: "finalization",
+      status: "completed",
       message: "Planning complete. Review options and confirm components."
     });
   } catch (error) {
     pushEvent("error", {
+      type: "planning_failed",
+      stage: "finalization",
+      status: "failed",
       error: "Failed to generate itinerary",
       details: error instanceof Error ? error.message : "Unknown error"
     });
@@ -138,8 +156,7 @@ app.post("/api/confirm-component", async (req, res) => {
     return res.status(400).json({ error: `Component '${componentType}' is not available in itinerary` });
   }
 
-  const matchingOption = component.options.find((option) => option.id === optionId);
-  if (!matchingOption) {
+  if (isConfirmationConflict(component.options, optionId)) {
     return res.status(400).json({ error: "Selected option is not valid for this component" });
   }
 
@@ -151,10 +168,19 @@ app.post("/api/confirm-component", async (req, res) => {
   const remainingComponent = nextComponentToConfirm(record.confirmations);
   if (!remainingComponent) {
     record.finalReview = await createFinalReview(record.preferences, record.itinerary, record.confirmations);
+    await appendTraceEvent(
+      normalizeTraceEvent(record.traceId, {
+        type: "final_confirmation_requested",
+        stage: "confirmation",
+        status: "started",
+        message: "All components confirmed. Waiting for final yes/no decision."
+      })
+    );
   }
 
   res.json({
     itineraryId,
+    traceId: record.traceId,
     confirmations: record.confirmations,
     nextComponentToConfirm: remainingComponent,
     finalReview: record.finalReview ?? null
@@ -181,6 +207,15 @@ app.post("/api/final-confirmation", (req, res) => {
 
   record.finalConfirmed = approved;
   record.finalConfirmationAt = new Date().toISOString();
+  void appendTraceEvent(
+    normalizeTraceEvent(record.traceId, {
+      type: "final_confirmation_received",
+      stage: "confirmation",
+      status: approved ? "approved" : "rejected",
+      approved,
+      message: approved ? "Final itinerary approved." : "Final itinerary rejected."
+    })
+  );
 
   res.json({
     itineraryId,
@@ -192,6 +227,32 @@ app.post("/api/final-confirmation", (req, res) => {
   });
 });
 
+app.get("/api/traces/:traceId", async (req, res) => {
+  const { traceId } = req.params;
+  if (!traceId) {
+    return res.status(400).json({ error: "traceId is required" });
+  }
+
+  try {
+    const content = await readFile(traceFilePath(traceId), "utf8");
+    const events = content
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => JSON.parse(line));
+
+    res.json({ traceId, events });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return res.status(404).json({ error: "Trace not found" });
+    }
+    res.status(500).json({
+      error: "Failed to read trace",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Trip planner app listening on http://localhost:${port}`);
 });
@@ -200,10 +261,11 @@ function nextComponentToConfirm(confirmations) {
   return TRIP_COMPONENTS.find((component) => !confirmations[component]) ?? null;
 }
 
-function storeItineraryRecord(preferences, itineraryDraft) {
+function storeItineraryRecord(preferences, itineraryDraft, traceId = null) {
   const itineraryId = randomUUID();
   itineraryStore.set(itineraryId, {
     itineraryId,
+    traceId,
     preferences,
     itinerary: itineraryDraft,
     confirmations: {
@@ -216,4 +278,37 @@ function storeItineraryRecord(preferences, itineraryDraft) {
   });
 
   return itineraryId;
+}
+
+function normalizeTraceEvent(traceId, payload) {
+  const status = payload?.status ?? inferStatus(payload?.type);
+  return {
+    timestamp: new Date().toISOString(),
+    traceId,
+    stage: payload?.stage ?? "general",
+    agent: payload?.agent ?? null,
+    status,
+    ...payload
+  };
+}
+
+function inferStatus(type) {
+  if (!type) return "info";
+  if (String(type).endsWith("_started") || type === "agent_invoked") return "started";
+  if (String(type).endsWith("_completed")) return "completed";
+  if (String(type).endsWith("_failed")) return "failed";
+  return "info";
+}
+
+function traceFilePath(traceId) {
+  return path.join(logsDir, `${traceId}.jsonl`);
+}
+
+async function appendTraceEvent(eventPayload) {
+  if (!eventPayload?.traceId) return;
+  try {
+    await appendFile(traceFilePath(eventPayload.traceId), `${JSON.stringify(eventPayload)}\n`, "utf8");
+  } catch (error) {
+    console.error("Failed to persist trace event", error);
+  }
 }

@@ -117,6 +117,17 @@ Use this checklist in each iteration review:
 - UX/API alignment:
   - Final confirmation supports both approve and reject paths.
 
+## Roadmap Artifacts
+
+- `references/implementation/01_baseline_audit.md`
+- `references/implementation/02_market_research.md`
+- `references/implementation/03_best_ideas_mapping.md`
+- `references/implementation/04_success_criteria.md`
+- `references/implementation/05_execution_plan.md`
+- `references/implementation/06_assumption_register.md`
+- `references/implementation/07_evaluation_report.md`
+- `references/implementation/08_iteration_log.md`
+
 The app:
 
 - Collects user inputs for trip timing, length, departure city, destination, activities, weather preferences, air travel class (`economy` or `business`), and hotel class (`3`, `4`, `5` stars)
@@ -213,6 +224,8 @@ Open:
   - Confirms one component (`flight`, `hotel`, `carRental`) by selected option ID
 - `POST /api/final-confirmation`
   - Final yes/no itinerary approval
+- `GET /api/traces/:traceId`
+  - Returns persisted trace events for replay/diagnostics by trace ID
 - `GET /api/health`
   - Health check
 

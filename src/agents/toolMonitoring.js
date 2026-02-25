@@ -36,6 +36,7 @@ export function attachStandardToolMonitoring(runner, { emit, stage, fallbackAgen
 
     emit({
       type: "tool_call_started",
+      status: "started",
       ...payload
     });
 
@@ -61,6 +62,7 @@ export function attachStandardToolMonitoring(runner, { emit, stage, fallbackAgen
 
     emit({
       type: "tool_call_completed",
+      status: "completed",
       ...payload
     });
 
@@ -71,6 +73,24 @@ export function attachStandardToolMonitoring(runner, { emit, stage, fallbackAgen
         message: `Web search tool output received (${payload.monitorLabel || "default"}).`
       });
     }
+  });
+
+  runner.on("agent_tool_error", (_context, eventAgent, eventTool, error, details) => {
+    const payload = buildToolPayload({
+      phase: "error",
+      stage,
+      eventAgent,
+      eventTool,
+      details,
+      result: error,
+      fallbackAgentName
+    });
+
+    emit({
+      type: "tool_call_failed",
+      status: "failed",
+      ...payload
+    });
   });
 
   return {
@@ -101,7 +121,10 @@ function buildToolPayload({ phase, stage, eventAgent, eventTool, details, result
     message:
       phase === "start"
         ? `Tool called: ${toolName}`
-        : `Tool output received: ${toolName}`,
+        : phase === "error"
+          ? `Tool call failed: ${toolName}`
+          : `Tool output received: ${toolName}`,
+    visibility: "debug",
     arguments: normalizeDetailValue(rawToolCall?.arguments),
     output: normalizeDetailValue(result),
     rawItem: normalizeDetailValue(rawToolCall)

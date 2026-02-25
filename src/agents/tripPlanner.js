@@ -5,6 +5,11 @@ import {
   createMonitoredHostedTool,
   tagToolForMonitoring
 } from "./toolMonitoring.js";
+import {
+  hasLowConfidenceResearch,
+  shouldAttemptJsonRepair,
+  shouldRetryAgentError
+} from "./failurePolicies.js";
 
 export const TRIP_COMPONENTS = ["flight", "hotel", "carRental"];
 
@@ -182,6 +187,7 @@ export async function buildItineraryDraft(preferences, options = {}) {
   emit({
     type: "planning_started",
     stage: "initialization",
+    status: "started",
     message: "Planning session started. Agents are preparing inputs."
   });
 
@@ -197,8 +203,9 @@ export async function buildItineraryDraft(preferences, options = {}) {
   ].join("\n");
 
   emit({
-    type: "agent_started",
+    type: "agent_invoked",
     stage: "research",
+    status: "started",
     agent: "TripResearchAgent",
     message: "Researching flights, hotels, car rentals, and activity ideas (using web search)."
   });
@@ -211,8 +218,9 @@ export async function buildItineraryDraft(preferences, options = {}) {
   });
 
   emit({
-    type: "agent_started",
+    type: "agent_invoked",
     stage: "safety",
+    status: "started",
     agent: "SafetyPackingAgent",
     message: "Checking safety considerations, weather, and packing guidance (using web search)."
   });
@@ -224,19 +232,69 @@ export async function buildItineraryDraft(preferences, options = {}) {
     emit
   });
 
-  const researchJson = parseAgentJson(extractAgentText(researchResult), "researchAgent");
+  let researchJson = await parseAgentJsonWithRepair({
+    rawText: extractAgentText(researchResult),
+    agentName: "researchAgent",
+    agent: researchAgent,
+    baseInput: researchInput,
+    stage: "research",
+    emit
+  });
+
+  if (hasLowConfidenceResearch(researchJson)) {
+    emit({
+      type: "fallback_triggered",
+      stage: "research",
+      status: "warning",
+      agent: "TripResearchAgent",
+      message: "Research results were low-confidence. Running one broadened query pass.",
+      summary: summarizeResearch(researchJson)
+    });
+
+    const broadenedInput = [
+      researchInput,
+      "Fallback instruction: broaden provider coverage and return at least one viable option for flight, hotel, and car rental.",
+      "If uncertain, include caveats in notes but keep strict JSON."
+    ].join("\n");
+
+    const fallbackResearchResult = await runAgentWithTelemetry({
+      agent: researchAgent,
+      agentName: "TripResearchAgent",
+      stage: "research",
+      input: broadenedInput,
+      emit
+    });
+
+    researchJson = await parseAgentJsonWithRepair({
+      rawText: extractAgentText(fallbackResearchResult),
+      agentName: "researchAgent",
+      agent: researchAgent,
+      baseInput: broadenedInput,
+      stage: "research",
+      emit
+    });
+  }
   emit({
     type: "agent_completed",
     stage: "research",
+    status: "completed",
     agent: "TripResearchAgent",
     message: "Research complete.",
     summary: summarizeResearch(researchJson)
   });
 
-  const safetyJson = parseAgentJson(extractAgentText(safetyResult), "safetyPackingAgent");
+  const safetyJson = await parseAgentJsonWithRepair({
+    rawText: extractAgentText(safetyResult),
+    agentName: "safetyPackingAgent",
+    agent: safetyPackingAgent,
+    baseInput: safetyInput,
+    stage: "safety",
+    emit
+  });
   emit({
     type: "agent_completed",
     stage: "safety",
+    status: "completed",
     agent: "SafetyPackingAgent",
     message: "Safety and packing analysis complete.",
     summary: summarizeSafety(safetyJson)
@@ -252,8 +310,9 @@ export async function buildItineraryDraft(preferences, options = {}) {
   ].join("\n");
 
   emit({
-    type: "agent_started",
+    type: "agent_invoked",
     stage: "composition",
+    status: "started",
     agent: "ItineraryComposerAgent",
     message: "Composing itinerary, costs, and confirmation questions."
   });
@@ -264,15 +323,30 @@ export async function buildItineraryDraft(preferences, options = {}) {
     input: itineraryInput,
     emit
   });
-  const itineraryDraft = parseAgentJson(extractAgentText(itineraryResult), "itineraryAgent");
+  const itineraryDraft = await parseAgentJsonWithRepair({
+    rawText: extractAgentText(itineraryResult),
+    agentName: "itineraryAgent",
+    agent: itineraryAgent,
+    baseInput: itineraryInput,
+    stage: "composition",
+    emit
+  });
 
   const normalized = normalizeItinerary(itineraryDraft, researchJson, safetyJson, preferences);
   emit({
     type: "agent_completed",
     stage: "composition",
+    status: "completed",
     agent: "ItineraryComposerAgent",
     message: "Itinerary draft is ready for your review.",
     summary: summarizeItinerary(normalized)
+  });
+
+  emit({
+    type: "planning_completed",
+    stage: "finalization",
+    status: "completed",
+    message: "Planning session completed successfully."
   });
 
   return normalized;
@@ -417,6 +491,39 @@ function parseAgentJson(rawText, agentName) {
     return JSON.parse(cleaned);
   } catch {
     throw new Error(`${agentName} did not return valid JSON: ${cleaned.slice(0, 200)}`);
+  }
+}
+
+async function parseAgentJsonWithRepair({ rawText, agentName, agent, baseInput, stage, emit }) {
+  try {
+    return parseAgentJson(rawText, agentName);
+  } catch (error) {
+    emit({
+      type: "fallback_triggered",
+      stage,
+      status: "warning",
+      agent: agent.name,
+      message: `${agentName} returned invalid JSON. Running one repair pass.`,
+      summary: {
+        reason: error instanceof Error ? error.message : "Unknown parse failure"
+      }
+    });
+
+    if (!shouldAttemptJsonRepair(rawText)) {
+      throw error;
+    }
+
+    const repairInput = [baseInput, "Repair instruction: return strict JSON only.", "Do not include markdown or explanation. Match the required schema exactly."].join("\n");
+
+    const repairResult = await runAgentWithTelemetry({
+      agent,
+      agentName: agent.name,
+      stage,
+      input: repairInput,
+      emit
+    });
+
+    return parseAgentJson(extractAgentText(repairResult), agentName);
   }
 }
 
@@ -578,121 +685,103 @@ function parseDateSafe(value) {
 
 async function runAgentWithTelemetry({ agent, agentName, stage, input, emit }) {
   emit({
-    type: "agent_prompt",
+    type: "prompt_sent",
     stage,
+    status: "started",
     agent: agentName,
     message: `Prompt sent to ${agentName}.`,
+    visibility: "debug",
     prompt: input
   });
 
-  const runner = new Runner();
-  const monitor = attachStandardToolMonitoring(runner, {
-    emit,
-    stage,
-    fallbackAgentName: agentName
-  });
+  const maxAttempts = 2;
+  let attempt = 0;
+  let lastError = null;
 
-  const streamedResult = await runner.run(agent, input, { stream: true });
-
-  for await (const event of streamedResult) {
-    if (event?.type !== "run_item_stream_event") continue;
-
-    const rawItem = event.item?.rawItem;
-    if (!rawItem) continue;
-
-    emit({
-      type: "llm_run_item",
-      stage,
-      agent: agentName,
-      message: `LLM run item: ${event.name}`,
-      summary: {
-        eventName: event.name,
-        itemType: event.item?.type ?? null,
-        rawItemType: rawItem?.type ?? null
-      },
-      rawItem: serializeRunItem(event.item)
-    });
-
-    emit({
-      type: "stream_event",
-      stage,
-      agent: agentName,
-      message: `Stream event: ${event.name}`,
-      summary: {
-        eventName: event.name,
-        itemType: event.item?.type ?? null,
-        rawItemType: rawItem?.type ?? null
-      }
-    });
-
-    if (event.name === "tool_called" || isToolCallRawItem(rawItem)) {
-      continue;
+  while (attempt < maxAttempts) {
+    attempt += 1;
+    if (attempt > 1) {
+      emit({
+        type: "retry_started",
+        stage,
+        status: "retrying",
+        agent: agentName,
+        message: `Retrying ${agentName} after failure.`,
+        summary: { attempt, maxAttempts }
+      });
     }
 
-    if (event.name === "tool_output" || isToolOutputRawItem(rawItem)) {
-      continue;
+    const runner = new Runner();
+    const monitor = attachStandardToolMonitoring(runner, {
+      emit,
+      stage,
+      fallbackAgentName: agentName
+    });
+
+    try {
+      const streamedResult = await runner.run(agent, input, { stream: true });
+
+      for await (const event of streamedResult) {
+        if (event?.type !== "run_item_stream_event") continue;
+        const rawItem = event.item?.rawItem;
+        if (!rawItem) continue;
+
+        emit({
+          type: "llm_run_item",
+          stage,
+          status: "info",
+          visibility: "debug",
+          agent: agentName,
+          message: `LLM run item: ${event.name}`,
+          summary: {
+            eventName: event.name,
+            itemType: event.item?.type ?? null,
+            rawItemType: rawItem?.type ?? null
+          },
+          rawItem: serializeRunItem(event.item)
+        });
+      }
+
+      await streamedResult.completed;
+      if (streamedResult.error) {
+        throw streamedResult.error;
+      }
+
+      const responseText = extractAgentText(streamedResult);
+
+      if (monitor.getCallCount() === 0) {
+        emit({
+          type: "tool_notice",
+          stage,
+          status: "warning",
+          agent: agentName,
+          message: "No tool calls were emitted in this agent run.",
+          summary: {
+            note: "Model may have responded directly without tool invocation."
+          }
+        });
+      }
+
+      emit({
+        type: "model_response_received",
+        stage,
+        status: "completed",
+        agent: agentName,
+        message: `Response received from ${agentName}.`,
+        visibility: "debug",
+        response: responseText
+      });
+
+      return streamedResult;
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetryAgentError(error, attempt, maxAttempts)) {
+        break;
+      }
     }
   }
 
-  await streamedResult.completed;
-  if (streamedResult.error) {
-    throw streamedResult.error;
-  }
-
-  const responseText = extractAgentText(streamedResult);
-
-  if (monitor.getCallCount() === 0) {
-    emit({
-      type: "tool_notice",
-      stage,
-      agent: agentName,
-      message: "No tool calls were emitted in this agent run.",
-      summary: {
-        note: "Model may have responded directly without tool invocation."
-      }
-    });
-  }
-
-  emit({
-    type: "agent_response",
-    stage,
-    agent: agentName,
-    message: `Response received from ${agentName}.`,
-    response: responseText
-  });
-
-  return streamedResult;
-}
-
-function extractToolName(rawItem) {
-  if (!rawItem || typeof rawItem !== "object") return null;
-  return rawItem.name ?? rawItem.type ?? null;
-}
-
-function extractToolArguments(rawItem) {
-  if (!rawItem || typeof rawItem !== "object") return null;
-  const value = rawItem.arguments;
-  return normalizeDetailValue(value);
-}
-
-function extractToolOutput(rawItem) {
-  if (!rawItem || typeof rawItem !== "object") return null;
-  if (typeof rawItem.output !== "undefined") {
-    return normalizeDetailValue(rawItem.output);
-  }
-
-  return normalizeDetailValue(rawItem);
-}
-
-function normalizeDetailValue(value) {
-  if (value == null) return null;
-  if (typeof value === "string") return value;
-
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
-  }
+  throw lastError instanceof Error ? lastError : new Error("Agent run failed");
 }
 
 function serializeRunItem(item) {
@@ -707,16 +796,4 @@ function serializeRunItem(item) {
   } catch {
     return String(item);
   }
-}
-
-function isToolCallRawItem(rawItem) {
-  return rawItem?.type === "function_call" || rawItem?.type === "hosted_tool_call" || rawItem?.type === "computer_call";
-}
-
-function isToolOutputRawItem(rawItem) {
-  return (
-    rawItem?.type === "function_call_result" ||
-    rawItem?.type === "computer_call_result" ||
-    (rawItem?.type === "hosted_tool_call" && typeof rawItem?.output !== "undefined")
-  );
 }

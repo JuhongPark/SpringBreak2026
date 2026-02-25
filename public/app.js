@@ -5,10 +5,12 @@ const activitySection = document.getElementById("activity");
 const activityList = document.getElementById("activity-list");
 const toolMonitorSection = document.getElementById("tool-monitor");
 const toolMonitorList = document.getElementById("tool-monitor-list");
+const DEBUG_MODE = new URLSearchParams(window.location.search).get("debug") === "1";
 
 const TOOL_MONITOR_TYPES = new Set([
   "tool_call_started",
   "tool_call_completed",
+  "tool_call_failed",
   "web_search_called",
   "web_search_output",
   "tool_called",
@@ -31,7 +33,7 @@ form.addEventListener("submit", async (event) => {
     const data = await streamPlan(payload);
 
     currentPlan = data;
-    setMessage("Draft itinerary created. Please confirm each component.");
+    setMessage(`Draft itinerary created. Trace ID: ${data.traceId || "n/a"}. Please confirm each component.`);
     renderItinerary(currentPlan);
   } catch (error) {
     setMessage(error.message || "Unexpected error", true);
@@ -145,10 +147,17 @@ function addActivity(eventData) {
 
   const time = new Date().toLocaleTimeString();
   const summary = event.summary ? `<div class="activity-summary">${escapeHtml(JSON.stringify(event.summary))}</div>` : "";
-  const details = [
+  const safeDetails = [
     renderDetailBlock("Tool Source", event.source),
     renderDetailBlock("Tool Family", event.toolFamily),
     renderDetailBlock("Tool Phase", event.phase),
+    renderDetailBlock("Status", event.status),
+    renderDetailBlock("Trace ID", event.traceId)
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const debugDetails = [
     renderDetailBlock("Prompt", event.prompt),
     renderDetailBlock("Response", event.response),
     renderDetailBlock("Tool Arguments", event.arguments),
@@ -163,7 +172,8 @@ function addActivity(eventData) {
     <div class="activity-time">${escapeHtml(time)} • ${escapeHtml(event.stage || "general")}</div>
     <div>${escapeHtml(title)}</div>
     ${summary}
-    ${details}
+    ${safeDetails}
+    ${DEBUG_MODE ? debugDetails : ""}
   `;
 
   activityList.appendChild(item);
@@ -183,13 +193,15 @@ function addToolMonitorItem(event) {
   const details = [
     renderDetailBlock("Agent", event.agent),
     renderDetailBlock("Stage", event.stage),
+    renderDetailBlock("Status", event.status),
+    renderDetailBlock("Trace ID", event.traceId),
     renderDetailBlock("Source", event.source),
     renderDetailBlock("Family", event.toolFamily),
     renderDetailBlock("Phase", event.phase),
-    renderDetailBlock("Arguments", event.arguments),
-    renderDetailBlock("Output", event.output),
-    renderDetailBlock("Raw Item", event.rawItem),
-    renderDetailBlock("Full Event JSON", safeStringify(event))
+    DEBUG_MODE ? renderDetailBlock("Arguments", event.arguments) : "",
+    DEBUG_MODE ? renderDetailBlock("Output", event.output) : "",
+    DEBUG_MODE ? renderDetailBlock("Raw Item", event.rawItem) : "",
+    DEBUG_MODE ? renderDetailBlock("Full Event JSON", safeStringify(event)) : ""
   ]
     .filter(Boolean)
     .join("");
@@ -354,26 +366,37 @@ function maybeRenderFinalAction(planData) {
     <p>${escapeHtml(planData.finalReview.finalSummary || "")}</p>
     <p><strong>${escapeHtml(planData.finalReview.finalConfirmationQuestion || "Confirm final itinerary?")}</strong></p>
     <p class="muted">${escapeHtml(planData.finalReview.purchaseReminder || "No purchases are made")}</p>
-    <button id="final-approve">Approve Final Itinerary</button>
+    <div class="inline">
+      <button id="final-approve">Approve Final Itinerary</button>
+      <button id="final-reject" class="secondary">Reject Final Itinerary</button>
+    </div>
   `;
 
   const approveButton = document.getElementById("final-approve");
+  const rejectButton = document.getElementById("final-reject");
   approveButton?.addEventListener("click", async () => {
-    try {
-      const response = await fetch("/api/final-confirmation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ itineraryId: currentPlan.itineraryId, approved: true })
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(apiErrorMessage(data, "Final confirmation failed"));
-      }
-      setMessage(data.message);
-    } catch (error) {
-      setMessage(error.message || "Unexpected final confirmation error", true);
-    }
+    await submitFinalDecision(true);
   });
+  rejectButton?.addEventListener("click", async () => {
+    await submitFinalDecision(false);
+  });
+}
+
+async function submitFinalDecision(approved) {
+  try {
+    const response = await fetch("/api/final-confirmation", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itineraryId: currentPlan.itineraryId, approved })
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(apiErrorMessage(data, "Final confirmation failed"));
+    }
+    setMessage(data.message);
+  } catch (error) {
+    setMessage(error.message || "Unexpected final confirmation error", true);
+  }
 }
 
 function renderSimpleList(items) {
