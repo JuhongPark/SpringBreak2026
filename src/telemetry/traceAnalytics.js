@@ -122,9 +122,20 @@ export function detectTraceAnomalies(report, thresholds = {}) {
     });
   }
 
+  const severityCounts = anomalies.reduce(
+    (acc, anomaly) => {
+      const key = anomaly.severity || "unknown";
+      acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    },
+    {}
+  );
+
   return {
     hasAnomalies: anomalies.length > 0,
     anomalies,
+    severityCounts,
+    recommendedActions: recommendActions(anomalies),
     thresholds: config
   };
 }
@@ -165,4 +176,29 @@ function pickEventSnapshot(event) {
     agent: event.agent ?? null,
     message: event.message ?? null
   };
+}
+
+function recommendActions(anomalies = []) {
+  const actions = new Set();
+  for (const anomaly of anomalies) {
+    switch (anomaly?.code) {
+      case "TRACE_DURATION_HIGH":
+      case "STAGE_DURATION_HIGH":
+        actions.add("Review long-running stages and inspect tool/model latency events.");
+        break;
+      case "RETRY_COUNT_HIGH":
+        actions.add("Inspect transient failures and adjust retry/fallback strategy if needed.");
+        break;
+      case "FALLBACK_COUNT_HIGH":
+        actions.add("Review research quality and broaden source/query strategy.");
+        break;
+      case "FAILED_EVENTS_PRESENT":
+        actions.add("Prioritize failed events, inspect trace report critical events, and rerun with debug mode.");
+        break;
+      default:
+        actions.add("Review trace report and raw events for root-cause analysis.");
+        break;
+    }
+  }
+  return Array.from(actions);
 }

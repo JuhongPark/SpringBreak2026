@@ -161,6 +161,14 @@ Use this checklist in each iteration review:
 - `references/implementation_cycle5/06_assumption_register.md`
 - `references/implementation_cycle5/07_evaluation_report.md`
 - `references/implementation_cycle5/08_iteration_log.md`
+- `references/implementation_cycle6/01_baseline_audit.md`
+- `references/implementation_cycle6/02_market_research.md`
+- `references/implementation_cycle6/03_best_ideas_mapping.md`
+- `references/implementation_cycle6/04_success_criteria.md`
+- `references/implementation_cycle6/05_execution_plan.md`
+- `references/implementation_cycle6/06_assumption_register.md`
+- `references/implementation_cycle6/07_evaluation_report.md`
+- `references/implementation_cycle6/08_iteration_log.md`
 
 The app:
 
@@ -266,6 +274,7 @@ Open:
   - Returns stage-level durations, critical events, and failure-oriented trace diagnostics
 - `GET /api/traces/:traceId/anomalies`
   - Returns threshold-based anomaly diagnostics derived from trace report metrics
+  - Supports optional query overrides: `maxDurationMs`, `maxStageDurationMs`, `maxRetries`, `maxFallbacks`, `maxFailures`
 - `GET /api/health`
   - Health check
 

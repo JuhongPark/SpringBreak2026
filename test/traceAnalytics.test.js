@@ -97,4 +97,34 @@ test("detectTraceAnomalies flags retries, failures, and long stages", () => {
   assert.ok(result.anomalies.some((item) => item.code === "RETRY_COUNT_HIGH"));
   assert.ok(result.anomalies.some((item) => item.code === "FALLBACK_COUNT_HIGH"));
   assert.ok(result.anomalies.some((item) => item.code === "FAILED_EVENTS_PRESENT"));
+  assert.equal(result.severityCounts.warning, 4);
+  assert.equal(result.severityCounts.critical, 1);
+  assert.ok(result.recommendedActions.length >= 1);
+});
+
+test("detectTraceAnomalies respects threshold overrides", () => {
+  const report = {
+    summary: {
+      durationMs: 1000,
+      failedEvents: 0
+    },
+    stageDurationsMs: {
+      research: 500
+    },
+    retryCount: 1,
+    fallbackCount: 0
+  };
+
+  const strict = detectTraceAnomalies(report, {
+    maxDurationMs: 10,
+    maxStageDurationMs: 10,
+    maxRetries: 0,
+    maxFallbacks: 0,
+    maxFailures: 0
+  });
+
+  assert.equal(strict.hasAnomalies, true);
+  assert.ok(strict.anomalies.some((item) => item.code === "TRACE_DURATION_HIGH"));
+  assert.ok(strict.anomalies.some((item) => item.code === "STAGE_DURATION_HIGH"));
+  assert.ok(strict.anomalies.some((item) => item.code === "RETRY_COUNT_HIGH"));
 });

@@ -301,7 +301,7 @@ app.get("/api/traces/:traceId/anomalies", async (req, res) => {
   try {
     const events = await traceStore.read(traceId);
     const report = buildTraceReport(events);
-    const anomalies = detectTraceAnomalies(report);
+    const anomalies = detectTraceAnomalies(report, parseAnomalyThresholds(req.query));
     res.json({ traceId, anomalies });
   } catch (error) {
     if (error?.code === "ENOENT") {
@@ -359,4 +359,19 @@ function inferStatus(type) {
   if (String(type).endsWith("_completed")) return "completed";
   if (String(type).endsWith("_failed")) return "failed";
   return "info";
+}
+
+function parseAnomalyThresholds(query = {}) {
+  return {
+    maxDurationMs: toPositiveNumber(query.maxDurationMs),
+    maxStageDurationMs: toPositiveNumber(query.maxStageDurationMs),
+    maxRetries: toPositiveNumber(query.maxRetries),
+    maxFallbacks: toPositiveNumber(query.maxFallbacks),
+    maxFailures: toPositiveNumber(query.maxFailures)
+  };
+}
+
+function toPositiveNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) && n >= 0 ? n : undefined;
 }
