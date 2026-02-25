@@ -201,6 +201,14 @@ Use this checklist in each iteration review:
 - `references/implementation_cycle10/06_assumption_register.md`
 - `references/implementation_cycle10/07_evaluation_report.md`
 - `references/implementation_cycle10/08_iteration_log.md`
+- `references/implementation_cycle11/01_baseline_audit.md`
+- `references/implementation_cycle11/02_market_research.md`
+- `references/implementation_cycle11/03_best_ideas_mapping.md`
+- `references/implementation_cycle11/04_success_criteria.md`
+- `references/implementation_cycle11/05_execution_plan.md`
+- `references/implementation_cycle11/06_assumption_register.md`
+- `references/implementation_cycle11/07_evaluation_report.md`
+- `references/implementation_cycle11/08_iteration_log.md`
 
 The app:
 
@@ -315,6 +323,9 @@ Open:
   - Supports the same optional profile/threshold query parameters as `/api/traces/:traceId/anomalies`
 - `GET /api/traces/:traceId/snapshot`
   - Returns compact operational snapshot (status, score, top anomaly, retry/fallback/failed counts, recommended actions)
+  - Supports the same optional profile/threshold query parameters as `/api/traces/:traceId/anomalies`
+- `GET /api/traces/:traceId/insights`
+  - Returns operator-oriented insights (failure rate, bottleneck stage, top issues, health status/score)
   - Supports the same optional profile/threshold query parameters as `/api/traces/:traceId/anomalies`
 - `GET /api/health`
   - Health check

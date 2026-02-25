@@ -210,6 +210,42 @@ export function buildTraceSnapshot(report, anomalyResult, health) {
   };
 }
 
+export function buildTraceInsights(report, anomalyResult, health) {
+  const safeReport = report ?? {};
+  const summary = safeReport.summary ?? {};
+  const stageBreakdown = safeReport.stageBreakdown ?? {};
+  const anomalies = anomalyResult?.anomalies ?? [];
+
+  const totalEvents = Number(summary.totalEvents || 0);
+  const failedEvents = Number(summary.failedEvents || 0);
+  const failureRate = totalEvents > 0 ? Number((failedEvents / totalEvents).toFixed(4)) : 0;
+
+  let bottleneckStage = null;
+  let maxDuration = -1;
+  for (const [stage, details] of Object.entries(stageBreakdown)) {
+    const durationMs = Number(details?.durationMs ?? -1);
+    if (durationMs > maxDuration) {
+      maxDuration = durationMs;
+      bottleneckStage = { stage, durationMs };
+    }
+  }
+
+  return {
+    status: health?.status ?? "unknown",
+    score: health?.score ?? 0,
+    totalEvents,
+    failedEvents,
+    failureRate,
+    bottleneckStage,
+    anomalyCount: anomalies.length,
+    topIssues: anomalies.slice(0, 3).map((item) => ({
+      code: item.code,
+      severity: item.severity,
+      message: item.message
+    }))
+  };
+}
+
 function sortEvents(events = []) {
   const safeEvents = Array.isArray(events) ? events : [];
   return [...safeEvents].sort((a, b) => {

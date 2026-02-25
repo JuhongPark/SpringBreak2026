@@ -12,6 +12,7 @@ import {
 import { isConfirmationConflict } from "./src/agents/failurePolicies.js";
 import { createTraceStore } from "./src/telemetry/traceStore.js";
 import {
+  buildTraceInsights,
   buildTraceSnapshot,
   buildTraceReport,
   detectTraceAnomalies,
@@ -406,6 +407,36 @@ app.get("/api/traces/:traceId/snapshot", async (req, res) => {
     }
     res.status(500).json({
       error: "Failed to build trace snapshot",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+app.get("/api/traces/:traceId/insights", async (req, res) => {
+  const { traceId } = req.params;
+  if (!traceId) {
+    return res.status(400).json({ error: "traceId is required" });
+  }
+
+  try {
+    const events = await traceStore.read(traceId);
+    const report = buildTraceReport(events);
+    const thresholdConfig = resolveAnomalyThresholds(req.query);
+    const anomalies = detectTraceAnomalies(report, thresholdConfig.thresholds);
+    const health = evaluateTraceHealth(anomalies);
+    const insights = buildTraceInsights(report, anomalies, health);
+    res.json({
+      traceId,
+      profile: thresholdConfig.profile,
+      thresholdOverridesApplied: thresholdConfig.overridesApplied,
+      insights
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return res.status(404).json({ error: "Trace not found" });
+    }
+    res.status(500).json({
+      error: "Failed to build trace insights",
       details: error instanceof Error ? error.message : "Unknown error"
     });
   }
