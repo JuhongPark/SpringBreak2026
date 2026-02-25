@@ -11,7 +11,7 @@ import {
 } from "./src/agents/tripPlanner.js";
 import { isConfirmationConflict } from "./src/agents/failurePolicies.js";
 import { createTraceStore } from "./src/telemetry/traceStore.js";
-import { summarizeTrace } from "./src/telemetry/traceAnalytics.js";
+import { buildTraceReport, summarizeTrace } from "./src/telemetry/traceAnalytics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -266,6 +266,27 @@ app.get("/api/traces/:traceId/summary", async (req, res) => {
     }
     res.status(500).json({
       error: "Failed to summarize trace",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+app.get("/api/traces/:traceId/report", async (req, res) => {
+  const { traceId } = req.params;
+  if (!traceId) {
+    return res.status(400).json({ error: "traceId is required" });
+  }
+
+  try {
+    const events = await traceStore.read(traceId);
+    const report = buildTraceReport(events);
+    res.json({ traceId, report });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return res.status(404).json({ error: "Trace not found" });
+    }
+    res.status(500).json({
+      error: "Failed to build trace report",
       details: error instanceof Error ? error.message : "Unknown error"
     });
   }
