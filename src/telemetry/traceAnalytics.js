@@ -188,6 +188,26 @@ export function evaluateTraceHealth(anomalyResult = {}) {
   };
 }
 
+export function buildTraceSnapshot(report, anomalyResult, health) {
+  const topAnomaly = (anomalyResult?.anomalies ?? [])[0] ?? null;
+  return {
+    status: health?.status ?? "unknown",
+    score: health?.score ?? 0,
+    summary: report?.summary ?? null,
+    topAnomaly: topAnomaly
+      ? {
+          code: topAnomaly.code,
+          severity: topAnomaly.severity,
+          message: topAnomaly.message
+        }
+      : null,
+    retryCount: report?.retryCount ?? 0,
+    fallbackCount: report?.fallbackCount ?? 0,
+    failedEvents: report?.summary?.failedEvents ?? 0,
+    recommendedActions: anomalyResult?.recommendedActions ?? []
+  };
+}
+
 function sortEvents(events = []) {
   const safeEvents = Array.isArray(events) ? events : [];
   return [...safeEvents].sort((a, b) => {

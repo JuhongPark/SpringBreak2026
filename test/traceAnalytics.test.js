@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {
+  buildTraceSnapshot,
   buildTraceReport,
   detectTraceAnomalies,
   evaluateTraceHealth,
@@ -175,4 +176,26 @@ test("evaluateTraceHealth maps anomaly severities to status and score", () => {
   });
   assert.equal(critical.status, "critical");
   assert.equal(critical.score, 40);
+});
+
+test("buildTraceSnapshot returns compact operational view", () => {
+  const report = {
+    summary: { failedEvents: 1, totalEvents: 10, durationMs: 5000 },
+    retryCount: 2,
+    fallbackCount: 1
+  };
+  const anomalies = {
+    anomalies: [{ code: "FAILED_EVENTS_PRESENT", severity: "critical", message: "failed events" }],
+    recommendedActions: ["Inspect failures first."]
+  };
+  const health = { status: "critical", score: 40 };
+
+  const snapshot = buildTraceSnapshot(report, anomalies, health);
+  assert.equal(snapshot.status, "critical");
+  assert.equal(snapshot.score, 40);
+  assert.equal(snapshot.retryCount, 2);
+  assert.equal(snapshot.fallbackCount, 1);
+  assert.equal(snapshot.failedEvents, 1);
+  assert.equal(snapshot.topAnomaly.code, "FAILED_EVENTS_PRESENT");
+  assert.ok(snapshot.recommendedActions.includes("Inspect failures first."));
 });
