@@ -13,6 +13,13 @@ test("tool timeout errors are retryable before max attempts", () => {
   assert.equal(shouldRetryAgentError(error, 2, 2), false);
 });
 
+test("HTTP status and structured error codes are retryable", () => {
+  assert.equal(shouldRetryAgentError({ status: 429, message: "rate limit" }, 1, 2), true);
+  assert.equal(shouldRetryAgentError({ statusCode: 503, message: "upstream unavailable" }, 1, 2), true);
+  assert.equal(shouldRetryAgentError({ code: "ETIMEDOUT", message: "socket timeout" }, 1, 2), true);
+  assert.equal(shouldRetryAgentError({ status: 400, message: "bad request" }, 1, 2), false);
+});
+
 test("empty or low-confidence research output triggers fallback", () => {
   assert.equal(
     hasLowConfidenceResearch({

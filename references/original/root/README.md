@@ -81,6 +81,8 @@ Unexpected situations must follow explicit fallback/recovery rules:
 - Gate B (after Implementation): verify observability and failure handling with scenario tests before feature expansion.
 - Gate C (after Evaluation): remove or revise assumptions that are not supported by runtime evidence.
 - Gate D (during Iteration): prioritize fixes based on reliability risk, then improve autonomy only after stability is proven.
+- At the start of each implementation cycle, run `npm run cycle:cleanup` to reset local runtime logs for a clean iteration baseline.
+  - Cleanup runs only after explicit confirmation input (`DELETE LOGS`) from the operator.
 
 ### Gate Acceptance Criteria
 
@@ -127,6 +129,14 @@ Use this checklist in each iteration review:
 - `references/implementation/06_assumption_register.md`
 - `references/implementation/07_evaluation_report.md`
 - `references/implementation/08_iteration_log.md`
+- `references/implementation_cycle2/01_baseline_audit.md`
+- `references/implementation_cycle2/02_market_research.md`
+- `references/implementation_cycle2/03_best_ideas_mapping.md`
+- `references/implementation_cycle2/04_success_criteria.md`
+- `references/implementation_cycle2/05_execution_plan.md`
+- `references/implementation_cycle2/06_assumption_register.md`
+- `references/implementation_cycle2/07_evaluation_report.md`
+- `references/implementation_cycle2/08_iteration_log.md`
 
 The app:
 

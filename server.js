@@ -3,7 +3,6 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
-import { mkdir, appendFile, readFile } from "fs/promises";
 import {
   buildItineraryDraft,
   createFinalReview,
@@ -11,6 +10,7 @@ import {
   TRIP_COMPONENTS
 } from "./src/agents/tripPlanner.js";
 import { isConfirmationConflict } from "./src/agents/failurePolicies.js";
+import { createTraceStore } from "./src/telemetry/traceStore.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -18,12 +18,13 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const logsDir = path.join(__dirname, "data", "logs");
+const traceStore = createTraceStore({ baseDir: logsDir });
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
 const itineraryStore = new Map();
-void mkdir(logsDir, { recursive: true });
+void traceStore.init();
 
 app.get("/api/health", (_req, res) => {
   res.json({ status: "ok", service: "spring-break-trip-agent" });
@@ -85,7 +86,7 @@ app.post("/api/plan-stream", async (req, res) => {
   const pushEvent = (eventName, payload) => {
     if (responseClosed) return;
     const normalized = normalizeTraceEvent(traceId, payload);
-    void appendTraceEvent(normalized);
+    void traceStore.append(normalized);
     res.write(`event: ${eventName}\n`);
     res.write(`data: ${JSON.stringify(normalized)}\n\n`);
   };
@@ -168,7 +169,7 @@ app.post("/api/confirm-component", async (req, res) => {
   const remainingComponent = nextComponentToConfirm(record.confirmations);
   if (!remainingComponent) {
     record.finalReview = await createFinalReview(record.preferences, record.itinerary, record.confirmations);
-    await appendTraceEvent(
+    await traceStore.append(
       normalizeTraceEvent(record.traceId, {
         type: "final_confirmation_requested",
         stage: "confirmation",
@@ -207,7 +208,7 @@ app.post("/api/final-confirmation", (req, res) => {
 
   record.finalConfirmed = approved;
   record.finalConfirmationAt = new Date().toISOString();
-  void appendTraceEvent(
+  void traceStore.append(
     normalizeTraceEvent(record.traceId, {
       type: "final_confirmation_received",
       stage: "confirmation",
@@ -234,12 +235,7 @@ app.get("/api/traces/:traceId", async (req, res) => {
   }
 
   try {
-    const content = await readFile(traceFilePath(traceId), "utf8");
-    const events = content
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean)
-      .map((line) => JSON.parse(line));
+    const events = await traceStore.read(traceId);
 
     res.json({ traceId, events });
   } catch (error) {
@@ -298,17 +294,4 @@ function inferStatus(type) {
   if (String(type).endsWith("_completed")) return "completed";
   if (String(type).endsWith("_failed")) return "failed";
   return "info";
-}
-
-function traceFilePath(traceId) {
-  return path.join(logsDir, `${traceId}.jsonl`);
-}
-
-async function appendTraceEvent(eventPayload) {
-  if (!eventPayload?.traceId) return;
-  try {
-    await appendFile(traceFilePath(eventPayload.traceId), `${JSON.stringify(eventPayload)}\n`, "utf8");
-  } catch (error) {
-    console.error("Failed to persist trace event", error);
-  }
 }
