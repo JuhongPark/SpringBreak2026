@@ -169,6 +169,25 @@ export function detectTraceAnomalies(report, thresholds = {}) {
   };
 }
 
+export function evaluateTraceHealth(anomalyResult = {}) {
+  const severityCounts = anomalyResult?.severityCounts ?? {};
+  const critical = Number(severityCounts.critical || 0);
+  const warning = Number(severityCounts.warning || 0);
+
+  const score = Math.max(0, 100 - critical * 50 - warning * 10);
+  const status = critical > 0 ? "critical" : warning > 0 ? "degraded" : "healthy";
+
+  return {
+    status,
+    score,
+    reasons: (anomalyResult?.anomalies ?? []).map((item) => ({
+      code: item.code,
+      severity: item.severity,
+      message: item.message
+    }))
+  };
+}
+
 function sortEvents(events = []) {
   const safeEvents = Array.isArray(events) ? events : [];
   return [...safeEvents].sort((a, b) => {

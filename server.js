@@ -14,6 +14,7 @@ import { createTraceStore } from "./src/telemetry/traceStore.js";
 import {
   buildTraceReport,
   detectTraceAnomalies,
+  evaluateTraceHealth,
   getAnomalyThresholdProfile,
   summarizeTrace
 } from "./src/telemetry/traceAnalytics.js";
@@ -320,6 +321,35 @@ app.get("/api/traces/:traceId/anomalies", async (req, res) => {
     }
     res.status(500).json({
       error: "Failed to detect trace anomalies",
+      details: error instanceof Error ? error.message : "Unknown error"
+    });
+  }
+});
+
+app.get("/api/traces/:traceId/health", async (req, res) => {
+  const { traceId } = req.params;
+  if (!traceId) {
+    return res.status(400).json({ error: "traceId is required" });
+  }
+
+  try {
+    const events = await traceStore.read(traceId);
+    const report = buildTraceReport(events);
+    const thresholdConfig = resolveAnomalyThresholds(req.query);
+    const anomalies = detectTraceAnomalies(report, thresholdConfig.thresholds);
+    const health = evaluateTraceHealth(anomalies);
+    res.json({
+      traceId,
+      profile: thresholdConfig.profile,
+      thresholdOverridesApplied: thresholdConfig.overridesApplied,
+      health
+    });
+  } catch (error) {
+    if (error?.code === "ENOENT") {
+      return res.status(404).json({ error: "Trace not found" });
+    }
+    res.status(500).json({
+      error: "Failed to evaluate trace health",
       details: error instanceof Error ? error.message : "Unknown error"
     });
   }

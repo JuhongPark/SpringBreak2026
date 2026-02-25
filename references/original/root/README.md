@@ -177,6 +177,14 @@ Use this checklist in each iteration review:
 - `references/implementation_cycle7/06_assumption_register.md`
 - `references/implementation_cycle7/07_evaluation_report.md`
 - `references/implementation_cycle7/08_iteration_log.md`
+- `references/implementation_cycle8/01_baseline_audit.md`
+- `references/implementation_cycle8/02_market_research.md`
+- `references/implementation_cycle8/03_best_ideas_mapping.md`
+- `references/implementation_cycle8/04_success_criteria.md`
+- `references/implementation_cycle8/05_execution_plan.md`
+- `references/implementation_cycle8/06_assumption_register.md`
+- `references/implementation_cycle8/07_evaluation_report.md`
+- `references/implementation_cycle8/08_iteration_log.md`
 
 The app:
 
@@ -284,6 +292,9 @@ Open:
   - Returns threshold-based anomaly diagnostics derived from trace report metrics
   - Supports optional profile presets: `profile=strict|default|lenient`
   - Supports optional query overrides: `maxDurationMs`, `maxStageDurationMs`, `maxRetries`, `maxFallbacks`, `maxFailures`
+- `GET /api/traces/:traceId/health`
+  - Returns health status (`healthy|degraded|critical`) and score (0-100) derived from anomaly severities
+  - Supports the same optional profile/threshold query parameters as `/api/traces/:traceId/anomalies`
 - `GET /api/health`
   - Health check
 

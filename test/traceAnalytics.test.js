@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildTraceReport,
   detectTraceAnomalies,
+  evaluateTraceHealth,
   getAnomalyThresholdProfile,
   summarizeTrace
 } from "../src/telemetry/traceAnalytics.js";
@@ -151,4 +152,27 @@ test("detectTraceAnomalies includes actionable recommendations for failures", ()
   const result = detectTraceAnomalies(report, { maxFailures: 0 });
   assert.equal(result.hasAnomalies, true);
   assert.ok(result.recommendedActions.some((text) => text.includes("failed events")));
+});
+
+test("evaluateTraceHealth maps anomaly severities to status and score", () => {
+  const healthy = evaluateTraceHealth({
+    severityCounts: {},
+    anomalies: []
+  });
+  assert.equal(healthy.status, "healthy");
+  assert.equal(healthy.score, 100);
+
+  const degraded = evaluateTraceHealth({
+    severityCounts: { warning: 2 },
+    anomalies: [{ code: "A", severity: "warning", message: "warn" }]
+  });
+  assert.equal(degraded.status, "degraded");
+  assert.equal(degraded.score, 80);
+
+  const critical = evaluateTraceHealth({
+    severityCounts: { warning: 1, critical: 1 },
+    anomalies: [{ code: "B", severity: "critical", message: "crit" }]
+  });
+  assert.equal(critical.status, "critical");
+  assert.equal(critical.score, 40);
 });
