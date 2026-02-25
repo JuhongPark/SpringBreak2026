@@ -1,3 +1,32 @@
+export const ANOMALY_THRESHOLD_PROFILES = {
+  strict: {
+    maxDurationMs: 120000,
+    maxStageDurationMs: 60000,
+    maxRetries: 1,
+    maxFallbacks: 0,
+    maxFailures: 0
+  },
+  default: {
+    maxDurationMs: 180000,
+    maxStageDurationMs: 90000,
+    maxRetries: 2,
+    maxFallbacks: 1,
+    maxFailures: 0
+  },
+  lenient: {
+    maxDurationMs: 300000,
+    maxStageDurationMs: 180000,
+    maxRetries: 4,
+    maxFallbacks: 3,
+    maxFailures: 1
+  }
+};
+
+export function getAnomalyThresholdProfile(profileName = "default") {
+  const normalized = String(profileName || "default").toLowerCase();
+  return ANOMALY_THRESHOLD_PROFILES[normalized] || ANOMALY_THRESHOLD_PROFILES.default;
+}
+
 export function summarizeTrace(events = []) {
   const sorted = sortEvents(events);
 
@@ -68,11 +97,11 @@ export function detectTraceAnomalies(report, thresholds = {}) {
   const anomalies = [];
 
   const config = {
-    maxDurationMs: thresholds.maxDurationMs ?? 180000,
-    maxStageDurationMs: thresholds.maxStageDurationMs ?? 90000,
-    maxRetries: thresholds.maxRetries ?? 2,
-    maxFallbacks: thresholds.maxFallbacks ?? 1,
-    maxFailures: thresholds.maxFailures ?? 0
+    maxDurationMs: thresholds.maxDurationMs ?? ANOMALY_THRESHOLD_PROFILES.default.maxDurationMs,
+    maxStageDurationMs: thresholds.maxStageDurationMs ?? ANOMALY_THRESHOLD_PROFILES.default.maxStageDurationMs,
+    maxRetries: thresholds.maxRetries ?? ANOMALY_THRESHOLD_PROFILES.default.maxRetries,
+    maxFallbacks: thresholds.maxFallbacks ?? ANOMALY_THRESHOLD_PROFILES.default.maxFallbacks,
+    maxFailures: thresholds.maxFailures ?? ANOMALY_THRESHOLD_PROFILES.default.maxFailures
   };
 
   if (Number(summary.durationMs) > config.maxDurationMs) {

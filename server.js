@@ -11,7 +11,12 @@ import {
 } from "./src/agents/tripPlanner.js";
 import { isConfirmationConflict } from "./src/agents/failurePolicies.js";
 import { createTraceStore } from "./src/telemetry/traceStore.js";
-import { buildTraceReport, detectTraceAnomalies, summarizeTrace } from "./src/telemetry/traceAnalytics.js";
+import {
+  buildTraceReport,
+  detectTraceAnomalies,
+  getAnomalyThresholdProfile,
+  summarizeTrace
+} from "./src/telemetry/traceAnalytics.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -301,8 +306,14 @@ app.get("/api/traces/:traceId/anomalies", async (req, res) => {
   try {
     const events = await traceStore.read(traceId);
     const report = buildTraceReport(events);
-    const anomalies = detectTraceAnomalies(report, parseAnomalyThresholds(req.query));
-    res.json({ traceId, anomalies });
+    const thresholdConfig = resolveAnomalyThresholds(req.query);
+    const anomalies = detectTraceAnomalies(report, thresholdConfig.thresholds);
+    res.json({
+      traceId,
+      profile: thresholdConfig.profile,
+      thresholdOverridesApplied: thresholdConfig.overridesApplied,
+      anomalies
+    });
   } catch (error) {
     if (error?.code === "ENOENT") {
       return res.status(404).json({ error: "Trace not found" });
@@ -369,6 +380,22 @@ function parseAnomalyThresholds(query = {}) {
     maxFallbacks: toPositiveNumber(query.maxFallbacks),
     maxFailures: toPositiveNumber(query.maxFailures)
   };
+}
+
+function resolveAnomalyThresholds(query = {}) {
+  const profile = String(query.profile || "default").toLowerCase();
+  const profileThresholds = getAnomalyThresholdProfile(profile);
+  const overrides = parseAnomalyThresholds(query);
+  const merged = {
+    maxDurationMs: overrides.maxDurationMs ?? profileThresholds.maxDurationMs,
+    maxStageDurationMs: overrides.maxStageDurationMs ?? profileThresholds.maxStageDurationMs,
+    maxRetries: overrides.maxRetries ?? profileThresholds.maxRetries,
+    maxFallbacks: overrides.maxFallbacks ?? profileThresholds.maxFallbacks,
+    maxFailures: overrides.maxFailures ?? profileThresholds.maxFailures
+  };
+
+  const overridesApplied = Object.values(overrides).some((value) => typeof value !== "undefined");
+  return { profile, thresholds: merged, overridesApplied };
 }
 
 function toPositiveNumber(value) {

@@ -1,6 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTraceReport, detectTraceAnomalies, summarizeTrace } from "../src/telemetry/traceAnalytics.js";
+import {
+  buildTraceReport,
+  detectTraceAnomalies,
+  getAnomalyThresholdProfile,
+  summarizeTrace
+} from "../src/telemetry/traceAnalytics.js";
 
 test("summarizeTrace returns counts and duration", () => {
   const events = [
@@ -127,4 +132,23 @@ test("detectTraceAnomalies respects threshold overrides", () => {
   assert.ok(strict.anomalies.some((item) => item.code === "TRACE_DURATION_HIGH"));
   assert.ok(strict.anomalies.some((item) => item.code === "STAGE_DURATION_HIGH"));
   assert.ok(strict.anomalies.some((item) => item.code === "RETRY_COUNT_HIGH"));
+});
+
+test("getAnomalyThresholdProfile returns strict and default profiles", () => {
+  const strict = getAnomalyThresholdProfile("strict");
+  const unknown = getAnomalyThresholdProfile("not-real");
+  assert.equal(strict.maxRetries, 1);
+  assert.equal(unknown.maxRetries, 2);
+});
+
+test("detectTraceAnomalies includes actionable recommendations for failures", () => {
+  const report = {
+    summary: { durationMs: 1000, failedEvents: 1 },
+    stageDurationsMs: {},
+    retryCount: 0,
+    fallbackCount: 0
+  };
+  const result = detectTraceAnomalies(report, { maxFailures: 0 });
+  assert.equal(result.hasAnomalies, true);
+  assert.ok(result.recommendedActions.some((text) => text.includes("failed events")));
 });
