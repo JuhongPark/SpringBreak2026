@@ -11,6 +11,112 @@ Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Br
    - Keep logs detailed enough to support rollback, replay, and safe re-planning when issues occur.
    - Build logging first, then add a system for reviewing and analyzing those logs effectively.
 
+## Baseline Usage Rule
+
+- Treat the original baseline as a requirement boundary, not as unquestionable implementation truth.
+- Keep required constraints, but actively challenge initial assumptions with evidence from logs, tests, and user feedback.
+- If observed behavior conflicts with initial assumptions, update design and implementation while preserving baseline requirements.
+
+## Logging Definition Of Done
+
+Logging is considered complete only when all items below are implemented:
+
+- Every planning request has a unique `traceId` and each event includes `timestamp`, `traceId`, `stage`, `agent`, `status`.
+- Every model call logs: prompt sent, model used, response received, latency, token usage (if available).
+- Every tool call logs: tool name, sanitized arguments, start/end status, latency, and error details on failure.
+- Required core events are emitted and visible:
+  - `planning_started`, `planning_completed`
+  - `agent_invoked`, `prompt_sent`, `model_response_received`
+  - `tool_call_started`, `tool_call_completed`, `tool_call_failed`
+  - `fallback_triggered`, `retry_started`, `rollback_started`, `rollback_completed`
+  - `final_confirmation_requested`, `final_confirmation_received`
+- Logs are queryable by `traceId` so a full session can be replayed step-by-step.
+- UI visibility and internal debug logs are separated by level (user-safe timeline vs. full diagnostic logs).
+
+## Failure Handling Matrix
+
+Unexpected situations must follow explicit fallback/recovery rules:
+
+- Missing or low-confidence search results:
+  - Trigger `fallback_triggered`
+  - Ask agent to broaden query once
+  - If still insufficient, present partial options and request user preference updates
+- Tool timeout or transient SDK/API error:
+  - Retry with bounded attempts (recommended: max 2)
+  - Emit `retry_started` with attempt count
+  - If retries fail, continue with remaining components and mark failed section clearly
+- Invalid or unparsable model output:
+  - Run one repair pass with stricter formatting instructions
+  - If still invalid, return safe error and request user to retry planning
+- Price/schedule inconsistency across components:
+  - Trigger reconciliation step before final itinerary
+  - Recalculate dependent nights/days/costs
+  - If inconsistency remains, block final confirmation and explain what must be changed
+- User confirmation conflict (e.g., selected option no longer valid):
+  - Re-fetch options for that component
+  - Preserve previous selections in logs for auditability
+
+## Data Safety And Visibility Rules
+
+- Never log secrets (API keys, auth headers, raw credentials).
+- Sanitize personal/sensitive user fields before persistence or UI rendering.
+- User-facing timeline must exclude sensitive internal payloads while preserving action transparency.
+- Internal logs should keep diagnostic detail needed for rollback/replay but remain access-controlled.
+- Define retention policy for logs and provide clear deletion behavior for stale sessions.
+
+## Implementation Roadmap
+
+1. Baseline Audit
+2. Market Research
+3. Extract Best Ideas
+4. Define Success Criteria
+5. Make Plan
+6. Implementation
+7. Evaluation
+8. Feedback and Iteration
+
+### Roadmap Execution Gates
+
+- Gate A (after Baseline Audit): list assumptions that can fail in real usage and define how each will be validated.
+- Gate B (after Implementation): verify observability and failure handling with scenario tests before feature expansion.
+- Gate C (after Evaluation): remove or revise assumptions that are not supported by runtime evidence.
+- Gate D (during Iteration): prioritize fixes based on reliability risk, then improve autonomy only after stability is proven.
+
+### Gate Acceptance Criteria
+
+- Gate A is complete only when at least 10 explicit assumptions are documented with:
+  - failure signal
+  - validation method
+  - owner
+- Gate B is complete only when scenario tests pass for:
+  - tool timeout
+  - empty/low-confidence search output
+  - invalid model JSON output
+  - confirmation conflict
+- Gate C is complete only when each failed assumption has:
+  - a documented root cause
+  - a code or prompt change linked to that cause
+  - a verification result after the change
+- Gate D is complete only when:
+  - no P0/P1 reliability issue remains open
+  - observability checks remain green for 2 consecutive iterations
+
+## Implementation Alignment Checklist
+
+Use this checklist in each iteration review:
+
+- Event schema alignment:
+  - All required events in "Logging Definition Of Done" are emitted.
+  - Every event includes `traceId`, `timestamp`, `stage`, `agent`, `status`.
+- Safety alignment:
+  - User-facing timeline excludes raw sensitive payloads.
+  - Prompt/tool payload visibility follows sanitization rules.
+- Reliability alignment:
+  - Retry/fallback behavior follows "Failure Handling Matrix".
+  - Replay path is possible from persisted logs for completed sessions.
+- UX/API alignment:
+  - Final confirmation supports both approve and reject paths.
+
 The app:
 
 - Collects user inputs for trip timing, length, departure city, destination, activities, weather preferences, air travel class (`economy` or `business`), and hotel class (`3`, `4`, `5` stars)
