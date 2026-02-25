@@ -2,6 +2,15 @@
 
 Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Break trip for any destination city.
 
+## Project Priorities
+
+1. Use agents effectively for clear role separation and reliable orchestration.
+2. Use the `@openai/agents` SDK correctly and consistently across the full workflow.
+3. Prioritize strong logging and visibility:
+   - Make AI behavior observable (what actions were taken, which tools were called, and how the SDK was used).
+   - Keep logs detailed enough to support rollback, replay, and safe re-planning when issues occur.
+   - Build logging first, then add a system for reviewing and analyzing those logs effectively.
+
 The app:
 
 - Collects user inputs for trip timing, length, departure city, destination, activities, weather preferences, air travel class (`economy` or `business`), and hotel class (`3`, `4`, `5` stars)
@@ -21,6 +30,7 @@ The app:
   - stage-level summaries
 - Asks the user to confirm each component
 - Presents a final itinerary for final confirmation
+- Accounts for unexpected situations by defining fallback and recovery handling (e.g., missing options, tool failures, schedule changes)
 - Never purchases anything
 
 ## Agent Design
