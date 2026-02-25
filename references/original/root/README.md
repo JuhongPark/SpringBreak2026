@@ -137,6 +137,14 @@ Use this checklist in each iteration review:
 - `references/implementation_cycle2/06_assumption_register.md`
 - `references/implementation_cycle2/07_evaluation_report.md`
 - `references/implementation_cycle2/08_iteration_log.md`
+- `references/implementation_cycle3/01_baseline_audit.md`
+- `references/implementation_cycle3/02_market_research.md`
+- `references/implementation_cycle3/03_best_ideas_mapping.md`
+- `references/implementation_cycle3/04_success_criteria.md`
+- `references/implementation_cycle3/05_execution_plan.md`
+- `references/implementation_cycle3/06_assumption_register.md`
+- `references/implementation_cycle3/07_evaluation_report.md`
+- `references/implementation_cycle3/08_iteration_log.md`
 
 The app:
 
@@ -236,6 +244,8 @@ Open:
   - Final yes/no itinerary approval
 - `GET /api/traces/:traceId`
   - Returns persisted trace events for replay/diagnostics by trace ID
+- `GET /api/traces/:traceId/summary`
+  - Returns aggregated trace diagnostics (event counts, status counts, failures, duration)
 - `GET /api/health`
   - Health check
 
