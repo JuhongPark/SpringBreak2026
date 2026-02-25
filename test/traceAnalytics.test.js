@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildTraceReport, summarizeTrace } from "../src/telemetry/traceAnalytics.js";
+import { buildTraceReport, detectTraceAnomalies, summarizeTrace } from "../src/telemetry/traceAnalytics.js";
 
 test("summarizeTrace returns counts and duration", () => {
   const events = [
@@ -66,4 +66,35 @@ test("buildTraceReport computes stage durations and critical events", () => {
   assert.equal(report.lastEvent.type, "planning_completed");
   assert.ok(report.failedEventTypes.includes("tool_call_failed"));
   assert.ok(report.criticalEvents.some((event) => event.type === "retry_started"));
+  assert.equal(report.retryCount, 1);
+  assert.equal(report.fallbackCount, 0);
+});
+
+test("detectTraceAnomalies flags retries, failures, and long stages", () => {
+  const report = {
+    summary: {
+      durationMs: 200000,
+      failedEvents: 2
+    },
+    stageDurationsMs: {
+      research: 120000
+    },
+    retryCount: 3,
+    fallbackCount: 2
+  };
+
+  const result = detectTraceAnomalies(report, {
+    maxDurationMs: 180000,
+    maxStageDurationMs: 90000,
+    maxRetries: 2,
+    maxFallbacks: 1,
+    maxFailures: 0
+  });
+
+  assert.equal(result.hasAnomalies, true);
+  assert.ok(result.anomalies.some((item) => item.code === "TRACE_DURATION_HIGH"));
+  assert.ok(result.anomalies.some((item) => item.code === "STAGE_DURATION_HIGH"));
+  assert.ok(result.anomalies.some((item) => item.code === "RETRY_COUNT_HIGH"));
+  assert.ok(result.anomalies.some((item) => item.code === "FALLBACK_COUNT_HIGH"));
+  assert.ok(result.anomalies.some((item) => item.code === "FAILED_EVENTS_PRESENT"));
 });

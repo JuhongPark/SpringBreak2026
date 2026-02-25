@@ -33,6 +33,8 @@ export function buildTraceReport(events = []) {
   const sorted = sortEvents(events);
   const summary = summarizeTrace(sorted);
   const stageDurationsMs = buildStageDurations(sorted);
+  const retryCount = summary.typeCounts.retry_started ?? 0;
+  const fallbackCount = summary.typeCounts.fallback_triggered ?? 0;
   const failedEventTypes = Array.from(
     new Set(
       sorted
@@ -44,6 +46,8 @@ export function buildTraceReport(events = []) {
   return {
     summary,
     stageDurationsMs,
+    retryCount,
+    fallbackCount,
     failedEventTypes,
     firstEvent: pickEventSnapshot(sorted[0]),
     lastEvent: pickEventSnapshot(sorted[sorted.length - 1]),
@@ -54,6 +58,74 @@ export function buildTraceReport(events = []) {
         )
       )
       .map((event) => pickEventSnapshot(event))
+  };
+}
+
+export function detectTraceAnomalies(report, thresholds = {}) {
+  const safeReport = report ?? {};
+  const summary = safeReport.summary ?? {};
+  const stageDurations = safeReport.stageDurationsMs ?? {};
+  const anomalies = [];
+
+  const config = {
+    maxDurationMs: thresholds.maxDurationMs ?? 180000,
+    maxStageDurationMs: thresholds.maxStageDurationMs ?? 90000,
+    maxRetries: thresholds.maxRetries ?? 2,
+    maxFallbacks: thresholds.maxFallbacks ?? 1,
+    maxFailures: thresholds.maxFailures ?? 0
+  };
+
+  if (Number(summary.durationMs) > config.maxDurationMs) {
+    anomalies.push({
+      code: "TRACE_DURATION_HIGH",
+      severity: "warning",
+      message: `Trace duration ${summary.durationMs}ms exceeded ${config.maxDurationMs}ms.`,
+      meta: { durationMs: summary.durationMs, thresholdMs: config.maxDurationMs }
+    });
+  }
+
+  for (const [stage, durationMs] of Object.entries(stageDurations)) {
+    if (Number(durationMs) > config.maxStageDurationMs) {
+      anomalies.push({
+        code: "STAGE_DURATION_HIGH",
+        severity: "warning",
+        message: `Stage '${stage}' duration ${durationMs}ms exceeded ${config.maxStageDurationMs}ms.`,
+        meta: { stage, durationMs, thresholdMs: config.maxStageDurationMs }
+      });
+    }
+  }
+
+  if ((safeReport.retryCount ?? 0) > config.maxRetries) {
+    anomalies.push({
+      code: "RETRY_COUNT_HIGH",
+      severity: "warning",
+      message: `Retry count ${(safeReport.retryCount ?? 0)} exceeded ${config.maxRetries}.`,
+      meta: { retryCount: safeReport.retryCount ?? 0, threshold: config.maxRetries }
+    });
+  }
+
+  if ((safeReport.fallbackCount ?? 0) > config.maxFallbacks) {
+    anomalies.push({
+      code: "FALLBACK_COUNT_HIGH",
+      severity: "warning",
+      message: `Fallback count ${(safeReport.fallbackCount ?? 0)} exceeded ${config.maxFallbacks}.`,
+      meta: { fallbackCount: safeReport.fallbackCount ?? 0, threshold: config.maxFallbacks }
+    });
+  }
+
+  if ((summary.failedEvents ?? 0) > config.maxFailures) {
+    anomalies.push({
+      code: "FAILED_EVENTS_PRESENT",
+      severity: "critical",
+      message: `Failed events ${(summary.failedEvents ?? 0)} exceeded ${config.maxFailures}.`,
+      meta: { failedEvents: summary.failedEvents ?? 0, threshold: config.maxFailures }
+    });
+  }
+
+  return {
+    hasAnomalies: anomalies.length > 0,
+    anomalies,
+    thresholds: config
   };
 }
 
