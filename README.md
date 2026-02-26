@@ -2,15 +2,21 @@
 
 Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Break trip for any destination city.
 
+![Main Screen](public/assets/images/readme-main-screen.png)
+
 ## Project Motto
 
 We trust the system to plan well, so our core goal is to clearly visualize how the `@openai/agents` SDK and each agent actually operate.
+
+<img src="public/assets/images/readme-agent-dag.png" alt="Execution DAG" width="544" />
 
 ## Improvements
 
 - Enhanced visualization for agent and tool execution flows
 - Improved service UI for clearer planning and confirmation experience
 - Expanded automated test coverage across the project (for example, option-cost calculation and pricing edge cases)
+
+## Core Capabilities
 
 The app:
 
