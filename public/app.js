@@ -28,6 +28,7 @@ let toolMonitorEvents = [];
 let selectedOptionsByComponent = {};
 let confirmedComponents = {};
 let finalReviewState = null;
+let serverSelectedCostSummary = null;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -546,6 +547,7 @@ function initializeSelectionState(planData) {
   selectedOptionsByComponent = {};
   confirmedComponents = {};
   finalReviewState = null;
+  serverSelectedCostSummary = null;
 
   const itinerary = planData?.itinerary ?? {};
   COMPONENT_TYPES.forEach((componentType) => {
@@ -630,6 +632,7 @@ function attachComponentHandlers() {
     input.addEventListener("change", () => {
       const componentType = String(input.getAttribute("name") || "").replace(/-option$/, "");
       selectedOptionsByComponent[componentType] = input.value;
+      serverSelectedCostSummary = null;
       updateCostSummary();
     });
   });
@@ -661,6 +664,7 @@ function attachComponentHandlers() {
           throw new Error(apiErrorMessage(data, "Failed to confirm component"));
         }
 
+        serverSelectedCostSummary = normalizeServerCostSummary(data.selectedCostSummary);
         confirmedComponents[componentType] = true;
         if (!data.nextComponentToConfirm) {
           finalReviewState = data.finalReview ?? null;
@@ -697,6 +701,7 @@ function attachComponentHandlers() {
           throw new Error(apiErrorMessage(data, "Failed to cancel confirmation"));
         }
 
+        serverSelectedCostSummary = normalizeServerCostSummary(data.selectedCostSummary);
         confirmedComponents[componentType] = false;
         finalReviewState = null;
         setMessage(`Canceled ${componentType} confirmation. Please select and confirm again.`);
@@ -750,6 +755,8 @@ async function submitFinalDecision(approved) {
     if (!response.ok) {
       throw new Error(apiErrorMessage(data, "Final confirmation failed"));
     }
+    serverSelectedCostSummary = normalizeServerCostSummary(data.selectedCostSummary);
+    updateCostSummary();
 
     if (approved) {
       setMessage("Congratulations! Your final itinerary is approved. No purchases were made, so you can relax.");
@@ -765,6 +772,7 @@ async function submitFinalDecision(approved) {
     if (!resetResponse.ok) {
       throw new Error(apiErrorMessage(resetData, "Failed to reset confirmations after rejection"));
     }
+    serverSelectedCostSummary = normalizeServerCostSummary(resetData.selectedCostSummary);
 
     COMPONENT_TYPES.forEach((componentType) => {
       confirmedComponents[componentType] = false;
@@ -778,6 +786,10 @@ async function submitFinalDecision(approved) {
 }
 
 function computeEstimatedCostSummary() {
+  if (serverSelectedCostSummary) {
+    return serverSelectedCostSummary;
+  }
+
   const itinerary = currentPlan?.itinerary;
   if (!itinerary?.components) return {};
 
@@ -803,6 +815,20 @@ function computeEstimatedCostSummary() {
     activitiesUsd,
     totalUsd: Number((flightUsd + hotelUsd + carRentalUsd + activitiesUsd).toFixed(2))
   };
+}
+
+function normalizeServerCostSummary(summary) {
+  if (!summary || typeof summary !== "object") return null;
+  const keys = ["flightUsd", "hotelUsd", "carRentalUsd", "activitiesUsd", "totalUsd"];
+  const normalized = {};
+  for (const key of keys) {
+    const value = summary[key];
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+      return null;
+    }
+    normalized[key] = Number(value.toFixed(2));
+  }
+  return normalized;
 }
 
 function computeOptionCostUsd(option) {
