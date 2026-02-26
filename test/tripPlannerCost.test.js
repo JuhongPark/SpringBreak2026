@@ -47,6 +47,11 @@ test("computeOptionCostUsd normalizes fractional nights and rentalDays to rounde
   assert.equal(computeOptionCostUsd({ dailyRateUsd: 50, rentalDays: 7.4 }), 350);
 });
 
+test("computeOptionCostUsd treats small positive fractional counts as minimum 1", () => {
+  assert.equal(computeOptionCostUsd({ nightlyUsd: 180, nights: 0.4 }), 180);
+  assert.equal(computeOptionCostUsd({ dailyRateUsd: 45, rentalDays: 0.49 }), 45);
+});
+
 test("computeSelectedCostSummary uses confirmed optionIds when present", () => {
   const itinerary = {
     components: {

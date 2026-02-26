@@ -509,7 +509,8 @@ function toNonNegativeUsd(value) {
 
 function toNonNegativeCount(value) {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return null;
-  return Math.round(value);
+  if (value === 0) return 0;
+  return Math.max(1, Math.round(value));
 }
 
 function roundUsd(value) {
