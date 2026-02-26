@@ -2,6 +2,10 @@
 
 Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Break trip for any destination city.
 
+## Project Motto
+
+We trust the system to plan well, so our core goal is to clearly visualize how the `@openai/agents` SDK and each agent actually operate.
+
 ## Project Priorities
 
 1. Use agents effectively for clear role separation and reliable orchestration.

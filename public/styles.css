@@ -4,15 +4,149 @@
 
 body {
   margin: 0;
-  font-family: Arial, sans-serif;
-  background: #f7f8fb;
-  color: #1f2937;
+  font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  background: #eef3fb;
+  color: #17253c;
 }
 
 .container {
-  max-width: 980px;
-  margin: 24px auto;
-  padding: 0 16px 24px;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0 0 24px;
+}
+
+.brand-header {
+  margin: 0 0 0;
+  padding: 16px 20px 14px;
+  background: linear-gradient(180deg, #0b4bb3 0%, #0a3f98 100%);
+  color: #f4f8ff;
+  border-radius: 0;
+}
+
+.brand-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand-logo {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.brand-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.brand-btn {
+  border: 1px solid #d1e3ff;
+  background: #f7fbff;
+  color: #0a3f98;
+  font-weight: 700;
+  padding: 10px 16px;
+}
+
+.brand-btn.ghost {
+  background: transparent;
+  color: #f7fbff;
+  border-color: #8eb9ff;
+}
+
+.brand-nav {
+  margin-top: 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  font-size: 21px;
+  font-weight: 600;
+}
+
+.brand-nav span {
+  padding: 6px 12px;
+  border: 1px solid rgba(209, 227, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.hero-panel {
+  margin: 0 0 16px;
+  padding: 0 0 16px;
+  background: radial-gradient(120% 120% at 0% 0%, #73bbe8 0%, #3796dc 36%, #0f67bc 70%, #084294 100%);
+  color: #f8fbff;
+  border-radius: 0;
+}
+
+.hero-banner {
+  overflow: hidden;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.hero-banner img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  height: auto;
+  margin: 0;
+}
+
+.hero-copy p {
+  color: #f4f8ff;
+  font-size: 20px;
+  line-height: 1.3;
+  margin-bottom: 0;
+  font-weight: 500;
+  text-shadow: 0 1px 6px rgba(7, 27, 63, 0.28);
+}
+
+.hero-copy-compact {
+  margin-top: 12px;
+  padding: 0 20px;
+  max-width: 1100px;
+  display: grid;
+  gap: 4px;
+}
+
+.trip-form-card {
+  margin-top: 16px;
+  border: 3px solid #f6c648;
+  border-radius: 14px;
+  background: #ffffff;
+  color: #17253c;
+  box-shadow: 0 12px 28px rgba(9, 45, 111, 0.24);
+}
+
+.trip-form-card h2,
+.trip-form-card label {
+  color: #17253c;
+}
+
+.trip-form-card .muted {
+  color: #4b5563;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(460px, 1fr);
+  gap: 16px;
+  align-items: start;
+  margin-top: 4px;
+}
+
+.left-column,
+.right-column {
+  min-width: 0;
+}
+
+.right-column {
+  position: static;
+  top: auto;
 }
 
 h1,
@@ -28,9 +162,9 @@ p {
 
 .card {
   background: white;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 16px;
+  border: 1px solid #d6deea;
+  border-radius: 12px;
+  padding: 18px;
   margin-bottom: 16px;
 }
 
@@ -39,6 +173,10 @@ p {
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 12px;
   margin-bottom: 12px;
+}
+
+.full-width-field {
+  grid-column: 1 / -1;
 }
 
 label {
@@ -57,10 +195,11 @@ button {
 
 button {
   cursor: pointer;
-  border: 1px solid #4b5563;
-  background: #111827;
+  border: 1px solid #0a4aa9;
+  background: #0a4aa9;
   color: #fff;
   border-radius: 8px;
+  font-weight: 700;
 }
 
 button.secondary {
@@ -87,6 +226,35 @@ button:disabled {
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   padding: 8px;
+}
+
+.kv-grid {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.kv-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 210px) 1fr;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #f8fafc;
+}
+
+.kv-key {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.kv-value {
+  color: #0f172a;
+  font-size: 14px;
+  word-break: break-word;
 }
 
 .muted {
@@ -133,6 +301,44 @@ button:disabled {
   margin-bottom: 4px;
 }
 
+.event-status-row {
+  margin-bottom: 6px;
+}
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+}
+
+.status-started {
+  color: #1d4ed8;
+  background: #dbeafe;
+  border-color: #93c5fd;
+}
+
+.status-completed {
+  color: #166534;
+  background: #dcfce7;
+  border-color: #86efac;
+}
+
+.status-failed {
+  color: #991b1b;
+  background: #fee2e2;
+  border-color: #fca5a5;
+}
+
+.status-info {
+  color: #374151;
+  background: #f3f4f6;
+  border-color: #d1d5db;
+}
+
 .activity-summary {
   margin-top: 6px;
   color: #374151;
@@ -158,4 +364,124 @@ button:disabled {
   white-space: pre-wrap;
   word-break: break-word;
   font-size: 12px;
+}
+
+.timeline-collapsible {
+  list-style: none;
+}
+
+.timeline-collapsible details {
+  border: 1px dashed #d1d5db;
+  border-radius: 8px;
+  padding: 8px;
+  background: #f9fafb;
+}
+
+.timeline-collapsible summary {
+  cursor: pointer;
+  color: #374151;
+  font-size: 13px;
+}
+
+.timeline-nested-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.dag-canvas {
+  overflow-x: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #fbfcfe;
+  padding: 8px;
+}
+
+.dag-svg {
+  width: 100%;
+  min-height: 260px;
+  display: block;
+}
+
+.dag-header {
+  fill: #4b5563;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.dag-edge {
+  fill: none;
+  stroke: #9ca3af;
+  stroke-width: 1.5;
+  marker-end: url(#dag-arrow);
+}
+
+.dag-arrowhead {
+  fill: #9ca3af;
+}
+
+.dag-node {
+  stroke-width: 1;
+}
+
+.dag-node-stage {
+  fill: #eef2ff;
+  stroke: #a5b4fc;
+}
+
+.dag-node-agent {
+  fill: #ecfeff;
+  stroke: #67e8f9;
+}
+
+.dag-node-tool {
+  fill: #f0fdf4;
+  stroke: #86efac;
+}
+
+.dag-node-text {
+  fill: #111827;
+  font-size: 18px;
+  font-weight: 500;
+  dominant-baseline: middle;
+}
+
+@media (max-width: 980px) {
+  .container {
+    padding: 0 0 20px;
+  }
+
+  .brand-header {
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .brand-logo {
+    font-size: 30px;
+  }
+
+  .brand-nav {
+    font-size: 16px;
+  }
+
+  .hero-copy p {
+    font-size: 18px;
+  }
+
+  .hero-banner img {
+    max-height: 220px;
+  }
+
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .right-column {
+    position: static;
+    top: auto;
+  }
 }

@@ -11,6 +11,9 @@ Build hands-on experience with:
 
 There is no single perfect architecture, but reliability and observability should be prioritized.
 
+## Project Motto
+We trust the system to plan well, so our core goal is to clearly visualize how the `@openai/agents` SDK and each agent actually operate.
+
 ## Required UI Visibility
 The UI should clearly show runtime activity:
 - Which agent is called

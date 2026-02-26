@@ -5,6 +5,8 @@ const activitySection = document.getElementById("activity");
 const activityList = document.getElementById("activity-list");
 const toolMonitorSection = document.getElementById("tool-monitor");
 const toolMonitorList = document.getElementById("tool-monitor-list");
+const dagViewSection = document.getElementById("dag-view");
+const dagCanvas = document.getElementById("dag-canvas");
 const DEBUG_MODE = new URLSearchParams(window.location.search).get("debug") === "1";
 
 const TOOL_MONITOR_TYPES = new Set([
@@ -17,7 +19,11 @@ const TOOL_MONITOR_TYPES = new Set([
   "tool_output"
 ]);
 
+const TIMELINE_VISIBLE_LIMIT = 3;
+
 let currentPlan = null;
+let activityEvents = [];
+let toolMonitorEvents = [];
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -129,14 +135,259 @@ function parseSseChunk(chunk) {
 }
 
 function resetTimeline() {
+  dagViewSection.classList.remove("hidden");
   activitySection.classList.remove("hidden");
-  activityList.innerHTML = "";
+  activityEvents = [];
   toolMonitorSection.classList.remove("hidden");
-  toolMonitorList.innerHTML = "";
+  toolMonitorEvents = [];
+  renderDagView();
+  renderActivityTimeline();
+  renderToolMonitorTimeline();
 }
 
 function addActivity(eventData) {
   const event = eventData ?? {};
+  const eventType = event.type || "activity";
+  activityEvents.push(event);
+  renderDagView();
+  renderActivityTimeline();
+
+  if (TOOL_MONITOR_TYPES.has(eventType)) {
+    toolMonitorEvents.push(event);
+    renderToolMonitorTimeline();
+  }
+}
+
+function renderDagView() {
+  dagCanvas.innerHTML = "";
+  const graph = buildDagGraph(activityEvents);
+  if (!graph.nodes.length) {
+    dagCanvas.innerHTML = '<p class="muted">DAG will appear as soon as events stream in.</p>';
+    return;
+  }
+
+  const canvasWidth = Math.max(680, dagCanvas.clientWidth || 0);
+  const horizontalPadding = 12;
+  const columnGap = 20;
+  const minNodeWidth = 150;
+  const computedNodeWidth = Math.floor((canvasWidth - horizontalPadding * 2 - columnGap * 2) / 3);
+  const nodeWidth = Math.max(minNodeWidth, computedNodeWidth);
+  const svgWidth = horizontalPadding * 2 + nodeWidth * 3 + columnGap * 2;
+  const columnX = [
+    horizontalPadding,
+    horizontalPadding + nodeWidth + columnGap,
+    horizontalPadding + (nodeWidth + columnGap) * 2
+  ];
+  const nodeHeight = 56;
+  const yGap = 18;
+  const topPadding = 62;
+  const colCount = 3;
+  const rowCount = Math.max(
+    1,
+    ...Array.from({ length: colCount }, (_, index) => graph.nodes.filter((node) => node.column === index).length)
+  );
+  const svgHeight = topPadding + rowCount * (nodeHeight + yGap) + 30;
+
+  const nodesByColumn = [[], [], []];
+  for (const node of graph.nodes) {
+    nodesByColumn[node.column].push(node);
+  }
+  for (const nodes of nodesByColumn) {
+    nodes.sort((a, b) => a.order - b.order);
+  }
+
+  const positionedNodes = new Map();
+  for (let column = 0; column < colCount; column += 1) {
+    nodesByColumn[column].forEach((node, rowIndex) => {
+      positionedNodes.set(node.id, {
+        ...node,
+        x: columnX[column],
+        y: topPadding + rowIndex * (nodeHeight + yGap),
+        width: nodeWidth,
+        height: nodeHeight
+      });
+    });
+  }
+
+  const headerLabelByColumn = ["Stage", "Agent", "Tool"];
+  const headerHtml = headerLabelByColumn
+    .map((label, index) => {
+      const x = columnX[index] + nodeWidth / 2;
+      return `<text x="${x}" y="34" text-anchor="middle" class="dag-header">${escapeHtml(label)}</text>`;
+    })
+    .join("");
+
+  const edgeHtml = graph.edges
+    .map((edge) => {
+      const fromNode = positionedNodes.get(edge.from);
+      const toNode = positionedNodes.get(edge.to);
+      if (!fromNode || !toNode) return "";
+      const x1 = fromNode.x + fromNode.width;
+      const y1 = fromNode.y + fromNode.height / 2;
+      const x2 = toNode.x;
+      const y2 = toNode.y + toNode.height / 2;
+      const bend = (x1 + x2) / 2;
+      return `<path class="dag-edge" d="M ${x1} ${y1} C ${bend} ${y1}, ${bend} ${y2}, ${x2} ${y2}" />`;
+    })
+    .join("");
+
+  const nodeHtml = Array.from(positionedNodes.values())
+    .map((node) => {
+      const textX = node.x + 12;
+      const textY = node.y + node.height / 2 + 1;
+      const label = formatDagLabel(node.label);
+      return `
+        <rect class="dag-node dag-node-${node.kind}" x="${node.x}" y="${node.y}" width="${node.width}" height="${node.height}" rx="8" />
+        <title>${escapeHtml(node.label)}</title>
+        <text x="${textX}" y="${textY}" class="dag-node-text">${escapeHtml(label)}</text>
+      `;
+    })
+    .join("");
+
+  dagCanvas.innerHTML = `
+    <svg class="dag-svg" viewBox="0 0 ${svgWidth} ${svgHeight}" preserveAspectRatio="xMinYMin meet" aria-label="Execution DAG">
+      <defs>
+        <marker id="dag-arrow" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+          <path d="M 0 0 L 10 4 L 0 8 z" class="dag-arrowhead"></path>
+        </marker>
+      </defs>
+      ${headerHtml}
+      ${edgeHtml}
+      ${nodeHtml}
+    </svg>
+  `;
+}
+
+function formatDagLabel(label) {
+  const value = String(label || "");
+  if (value.length <= 20) return value;
+  return `${value.slice(0, 17)}...`;
+}
+
+function buildDagGraph(events) {
+  const nodes = [];
+  const edges = [];
+  const edgeKeys = new Set();
+  const stageNodeByName = new Map();
+  const agentNodeByName = new Map();
+  const toolNodeByName = new Map();
+  const stageOrder = [];
+
+  const addNode = (id, label, column, kind, order) => {
+    const node = { id, label, column, kind, order };
+    nodes.push(node);
+    return node;
+  };
+
+  const addEdge = (from, to) => {
+    if (!from || !to) return;
+    const edgeKey = `${from}->${to}`;
+    if (edgeKeys.has(edgeKey)) return;
+    edgeKeys.add(edgeKey);
+    edges.push({ from, to });
+  };
+
+  for (const event of events) {
+    const stageName = String(event.stage || "general");
+    if (!stageNodeByName.has(stageName)) {
+      stageOrder.push(stageName);
+      stageNodeByName.set(stageName, addNode(`stage:${stageName}`, stageName, 0, "stage", stageOrder.length - 1));
+    }
+  }
+
+  for (let index = 0; index < stageOrder.length - 1; index += 1) {
+    const current = stageNodeByName.get(stageOrder[index]);
+    const next = stageNodeByName.get(stageOrder[index + 1]);
+    addEdge(current?.id, next?.id);
+  }
+
+  for (const event of events) {
+    const stageName = String(event.stage || "general");
+    const stageNode = stageNodeByName.get(stageName);
+    const agentName = event.agent ? String(event.agent) : "";
+
+    let agentNode = null;
+    if (agentName) {
+      if (!agentNodeByName.has(agentName)) {
+        const order = agentNodeByName.size;
+        agentNodeByName.set(agentName, addNode(`agent:${agentName}`, agentName, 1, "agent", order));
+      }
+      agentNode = agentNodeByName.get(agentName);
+      addEdge(stageNode?.id, agentNode?.id);
+    }
+
+    const isToolEvent = TOOL_MONITOR_TYPES.has(String(event.type || "")) || Boolean(event.toolName);
+    if (isToolEvent) {
+      const rawToolName = event.toolName || event.type || "tool";
+      const toolName = String(rawToolName);
+      if (!toolNodeByName.has(toolName)) {
+        const order = toolNodeByName.size;
+        toolNodeByName.set(toolName, addNode(`tool:${toolName}`, toolName, 2, "tool", order));
+      }
+      const toolNode = toolNodeByName.get(toolName);
+      if (agentNode) {
+        addEdge(agentNode.id, toolNode?.id);
+      } else {
+        addEdge(stageNode?.id, toolNode?.id);
+      }
+    }
+  }
+
+  return { nodes, edges };
+}
+
+function renderActivityTimeline() {
+  renderCollapsibleList(activityList, activityEvents, buildActivityItem, {
+    limit: TIMELINE_VISIBLE_LIMIT,
+    label: "activity events"
+  });
+}
+
+function renderToolMonitorTimeline() {
+  renderCollapsibleList(toolMonitorList, toolMonitorEvents, buildToolMonitorItem, {
+    limit: TIMELINE_VISIBLE_LIMIT,
+    label: "tool events"
+  });
+}
+
+function renderCollapsibleList(root, items, renderItem, options) {
+  const limit = options?.limit ?? 3;
+  const label = options?.label ?? "events";
+  root.innerHTML = "";
+
+  if (!items.length) {
+    return;
+  }
+
+  const recentItems = items.slice(-limit).reverse();
+  const remainingItems = items.slice(0, -limit).reverse();
+
+  for (const event of recentItems) {
+    root.appendChild(renderItem(event));
+  }
+
+  if (!remainingItems.length) {
+    return;
+  }
+
+  const collapsible = document.createElement("li");
+  collapsible.className = "timeline-collapsible";
+  const details = document.createElement("details");
+  const summary = document.createElement("summary");
+  summary.textContent = `Show ${remainingItems.length} more ${label}`;
+  details.appendChild(summary);
+
+  const nestedList = document.createElement("ul");
+  nestedList.className = "timeline-nested-list";
+  for (const event of remainingItems) {
+    nestedList.appendChild(renderItem(event));
+  }
+  details.appendChild(nestedList);
+  collapsible.appendChild(details);
+  root.appendChild(collapsible);
+}
+
+function buildActivityItem(event) {
   const eventType = event.type || "activity";
   const title = event.agent
     ? `[${eventType}] ${event.agent}: ${event.message || "Update"}`
@@ -145,7 +396,7 @@ function addActivity(eventData) {
   const item = document.createElement("li");
   item.className = "activity-item";
 
-  const time = new Date().toLocaleTimeString();
+  const time = formatEventTime(event.timestamp);
   const summary = event.summary ? `<div class="activity-summary">${escapeHtml(JSON.stringify(event.summary))}</div>` : "";
   const safeDetails = [
     renderDetailBlock("Tool Source", event.source),
@@ -167,8 +418,12 @@ function addActivity(eventData) {
   ]
     .filter(Boolean)
     .join("");
+  const statusMeta = getStatusMeta(event.status);
 
   item.innerHTML = `
+    <div class="event-status-row">
+      <span class="status-pill ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
+    </div>
     <div class="activity-time">${escapeHtml(time)} • ${escapeHtml(event.stage || "general")}</div>
     <div>${escapeHtml(title)}</div>
     ${summary}
@@ -176,18 +431,14 @@ function addActivity(eventData) {
     ${DEBUG_MODE ? debugDetails : ""}
   `;
 
-  activityList.appendChild(item);
-
-  if (TOOL_MONITOR_TYPES.has(eventType)) {
-    addToolMonitorItem(event);
-  }
+  return item;
 }
 
-function addToolMonitorItem(event) {
+function buildToolMonitorItem(event) {
   const item = document.createElement("li");
   item.className = "activity-item";
 
-  const time = new Date().toLocaleTimeString();
+  const time = formatEventTime(event.timestamp);
   const title = `[${event.type || "tool"}] ${event.toolName || "unknown_tool"}`;
 
   const details = [
@@ -205,14 +456,49 @@ function addToolMonitorItem(event) {
   ]
     .filter(Boolean)
     .join("");
+  const statusMeta = getStatusMeta(event.status);
 
   item.innerHTML = `
+    <div class="event-status-row">
+      <span class="status-pill ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
+    </div>
     <div class="activity-time">${escapeHtml(time)}</div>
     <div>${escapeHtml(title)}</div>
     ${details}
   `;
 
-  toolMonitorList.appendChild(item);
+  return item;
+}
+
+function formatEventTime(timestamp) {
+  if (!timestamp) {
+    return new Date().toLocaleTimeString();
+  }
+
+  const parsed = new Date(timestamp);
+  if (Number.isNaN(parsed.getTime())) {
+    return new Date().toLocaleTimeString();
+  }
+
+  return parsed.toLocaleTimeString();
+}
+
+function getStatusMeta(status) {
+  const normalized = String(status || "info").toLowerCase();
+
+  if (normalized === "completed" || normalized === "approved" || normalized === "success") {
+    return { label: normalized.toUpperCase(), className: "status-completed" };
+  }
+
+  if (normalized === "failed" || normalized === "error" || normalized === "rejected") {
+    return { label: normalized.toUpperCase(), className: "status-failed" };
+  }
+
+  if (normalized === "started" || normalized === "running" || normalized === "pending") {
+    return { label: normalized.toUpperCase(), className: "status-started" };
+  }
+
+  return { label: normalized.toUpperCase(), className: "status-info" };
 }
 
 function renderDetailBlock(label, value) {
@@ -267,7 +553,7 @@ function renderItinerary(planData) {
     <h3>Packing List</h3>
     ${renderSimpleList(itinerary.packingList || [])}
     <h3>Estimated Cost Summary (USD)</h3>
-    <pre>${escapeHtml(JSON.stringify(itinerary.estimatedCostSummary, null, 2))}</pre>
+    ${renderCostSummary(itinerary.estimatedCostSummary || {})}
     <div id="final-review"></div>
   `;
 
@@ -290,7 +576,7 @@ function renderItinerary(planData) {
               <strong>${escapeHtml(option.label || option.id)}</strong>
             </div>
             <div class="muted">${escapeHtml(option.notes || "")}</div>
-            <pre>${escapeHtml(JSON.stringify(option, null, 2))}</pre>
+            ${renderObjectFields(option, ["id", "label", "notes"])}
           </label>
         `
       )
@@ -413,6 +699,74 @@ function renderActivityList(items) {
     })
     .join("");
   return `<ul class=\"list\">${rows}</ul>`;
+}
+
+function renderCostSummary(summary) {
+  const entries = Object.entries(summary || {});
+  if (!entries.length) {
+    return '<p class="muted">No cost summary available.</p>';
+  }
+
+  const rows = entries
+    .map(([key, value]) => {
+      const isNumber = typeof value === "number" && Number.isFinite(value);
+      const formattedValue = isNumber ? formatUsd(value) : String(value);
+      return `
+        <div class="kv-row">
+          <span class="kv-key">${escapeHtml(humanizeKey(key))}</span>
+          <span class="kv-value">${escapeHtml(formattedValue)}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `<div class="kv-grid">${rows}</div>`;
+}
+
+function renderObjectFields(obj, skipKeys = []) {
+  const skip = new Set(skipKeys);
+  const entries = Object.entries(obj || {}).filter(([key]) => !skip.has(key));
+  if (!entries.length) {
+    return "";
+  }
+
+  const rows = entries
+    .map(([key, value]) => {
+      const formatted = formatFieldValue(value);
+      return `
+        <div class="kv-row">
+          <span class="kv-key">${escapeHtml(humanizeKey(key))}</span>
+          <span class="kv-value">${escapeHtml(formatted)}</span>
+        </div>
+      `;
+    })
+    .join("");
+
+  return `<div class="kv-grid">${rows}</div>`;
+}
+
+function formatFieldValue(value) {
+  if (value == null) return "-";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value >= 100 ? formatUsd(value) : String(value);
+  }
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
+function humanizeKey(key) {
+  return String(key)
+    .replace(/([A-Z])/g, " $1")
+    .replace(/_/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function formatUsd(value) {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(
+    value
+  );
 }
 
 function escapeHtml(value) {

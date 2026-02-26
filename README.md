@@ -2,6 +2,10 @@
 
 Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Break trip for any destination city.
 
+## Project Motto
+
+We trust the system to plan well, so our core goal is to clearly visualize how the `@openai/agents` SDK and each agent actually operate.
+
 The app:
 
 - Collects user inputs for trip timing, length, departure city, destination, activities, weather preferences, air travel class (`economy` or `business`), and hotel class (`3`, `4`, `5` stars)
