@@ -112,3 +112,32 @@ test("computeSelectedCostSummary falls back to recommended/default option when c
   assert.equal(summary.activitiesUsd, 40);
   assert.equal(summary.totalUsd, 2295);
 });
+
+test("computeSelectedCostSummary ignores invalid or negative activity costs", () => {
+  const itinerary = {
+    components: {
+      flight: {
+        recommendedOptionId: "f1",
+        options: [{ id: "f1", costUsd: 455 }]
+      },
+      hotel: {
+        recommendedOptionId: "h1",
+        options: [{ id: "h1", nightlyUsd: 200, nights: 7 }]
+      },
+      carRental: {
+        recommendedOptionId: "c1",
+        options: [{ id: "c1", dailyRateUsd: 50, rentalDays: 8 }]
+      }
+    },
+    activities: [
+      { estimatedCostUsd: 40 },
+      { estimatedCostUsd: -20 },
+      { estimatedCostUsd: "25" },
+      { estimatedCostUsd: 19.995 }
+    ]
+  };
+
+  const summary = computeSelectedCostSummary(itinerary, {});
+  assert.equal(summary.activitiesUsd, 60);
+  assert.equal(summary.totalUsd, 2315);
+});

@@ -457,7 +457,12 @@ export function computeSelectedCostSummary(itinerary, confirmations = {}) {
   const hotelUsd = optionCostBySelection("hotel");
   const carRentalUsd = optionCostBySelection("carRental");
   const activitiesUsd = Array.isArray(itinerary?.activities)
-    ? roundUsd(itinerary.activities.reduce((sum, activity) => sum + Number(activity.estimatedCostUsd || 0), 0))
+    ? roundUsd(
+        itinerary.activities.reduce((sum, activity) => {
+          const cost = toNonNegativeUsd(activity?.estimatedCostUsd);
+          return sum + (cost ?? 0);
+        }, 0)
+      )
     : 0;
 
   return {

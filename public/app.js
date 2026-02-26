@@ -805,7 +805,12 @@ function computeEstimatedCostSummary() {
   const hotelUsd = componentCost("hotel");
   const carRentalUsd = componentCost("carRental");
   const activitiesUsd = Array.isArray(itinerary.activities)
-    ? itinerary.activities.reduce((sum, activity) => sum + Number(activity.estimatedCostUsd || 0), 0)
+    ? roundUsd(
+        itinerary.activities.reduce((sum, activity) => {
+          const cost = toNonNegativeUsd(activity?.estimatedCostUsd);
+          return sum + (cost ?? 0);
+        }, 0)
+      )
     : 0;
 
   return {
