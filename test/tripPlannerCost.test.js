@@ -42,6 +42,11 @@ test("computeOptionCostUsd rounds decimal values to cents", () => {
   assert.equal(computeOptionCostUsd({ dailyRateUsd: 49.995, rentalDays: 8 }), 399.96);
 });
 
+test("computeOptionCostUsd normalizes fractional nights and rentalDays to rounded integer counts", () => {
+  assert.equal(computeOptionCostUsd({ nightlyUsd: 120, nights: 2.6 }), 360);
+  assert.equal(computeOptionCostUsd({ dailyRateUsd: 50, rentalDays: 7.4 }), 350);
+});
+
 test("computeSelectedCostSummary uses confirmed optionIds when present", () => {
   const itinerary = {
     components: {
