@@ -453,13 +453,32 @@ function optionCostById(component) {
   if (!component?.options?.length) return 0;
   const recommendedId = component.recommendedOptionId ?? component.options[0].id;
   const option = component.options.find((item) => item.id === recommendedId) ?? component.options[0];
+  return computeOptionCostUsd(option);
+}
 
-  if (typeof option.costUsd === "number") {
+export function computeOptionCostUsd(option) {
+  if (!option || typeof option !== "object") return 0;
+
+  if (typeof option.costUsd === "number" && Number.isFinite(option.costUsd)) {
     return option.costUsd;
   }
 
-  if (typeof option.nightlyUsd === "number" && typeof option.nights === "number") {
+  if (
+    typeof option.nightlyUsd === "number" &&
+    Number.isFinite(option.nightlyUsd) &&
+    typeof option.nights === "number" &&
+    Number.isFinite(option.nights)
+  ) {
     return Number((option.nightlyUsd * option.nights).toFixed(2));
+  }
+
+  if (
+    typeof option.dailyRateUsd === "number" &&
+    Number.isFinite(option.dailyRateUsd) &&
+    typeof option.rentalDays === "number" &&
+    Number.isFinite(option.rentalDays)
+  ) {
+    return Number((option.dailyRateUsd * option.rentalDays).toFixed(2));
   }
 
   return 0;
