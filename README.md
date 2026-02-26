@@ -10,6 +10,7 @@ We trust the system to plan well, so our core goal is to clearly visualize how t
 
 - Enhanced visualization for agent and tool execution flows
 - Improved service UI for clearer planning and confirmation experience
+- Expanded automated test coverage across the project (for example, option-cost calculation and pricing edge cases)
 
 The app:
 

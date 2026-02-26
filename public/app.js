@@ -786,18 +786,7 @@ function computeEstimatedCostSummary() {
     if (!component?.options?.length) return 0;
     const selectedId = selectedOptionsByComponent[componentType] || component.recommendedOptionId || component.options[0]?.id;
     const option = component.options.find((item) => item.id === selectedId) ?? component.options[0];
-    if (!option) return 0;
-
-    if (typeof option.costUsd === "number" && Number.isFinite(option.costUsd)) {
-      return option.costUsd;
-    }
-    if (typeof option.nightlyUsd === "number" && typeof option.nights === "number") {
-      return Number((option.nightlyUsd * option.nights).toFixed(2));
-    }
-    if (typeof option.dailyRateUsd === "number" && typeof option.rentalDays === "number") {
-      return Number((option.dailyRateUsd * option.rentalDays).toFixed(2));
-    }
-    return 0;
+    return computeOptionCostUsd(option);
   };
 
   const flightUsd = componentCost("flight");
@@ -814,6 +803,39 @@ function computeEstimatedCostSummary() {
     activitiesUsd,
     totalUsd: Number((flightUsd + hotelUsd + carRentalUsd + activitiesUsd).toFixed(2))
   };
+}
+
+function computeOptionCostUsd(option) {
+  if (!option || typeof option !== "object") return 0;
+
+  const explicitCost = toNonNegativeUsd(option.costUsd);
+  if (explicitCost !== null) return roundUsd(explicitCost);
+
+  const nightlyUsd = toNonNegativeUsd(option.nightlyUsd);
+  const nights = toNonNegativeCount(option.nights);
+  if (nightlyUsd !== null && nights !== null) {
+    return roundUsd(nightlyUsd * nights);
+  }
+
+  const dailyRateUsd = toNonNegativeUsd(option.dailyRateUsd);
+  const rentalDays = toNonNegativeCount(option.rentalDays);
+  if (dailyRateUsd !== null && rentalDays !== null) {
+    return roundUsd(dailyRateUsd * rentalDays);
+  }
+
+  return 0;
+}
+
+function toNonNegativeUsd(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function toNonNegativeCount(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function roundUsd(value) {
+  return Number(value.toFixed(2));
 }
 
 function updateCostSummary() {

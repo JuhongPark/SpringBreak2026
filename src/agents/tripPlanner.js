@@ -458,30 +458,43 @@ function optionCostById(component) {
 
 export function computeOptionCostUsd(option) {
   if (!option || typeof option !== "object") return 0;
+  const explicitCost = toNonNegativeUsd(option.costUsd);
 
-  if (typeof option.costUsd === "number" && Number.isFinite(option.costUsd)) {
-    return option.costUsd;
+  if (explicitCost !== null) {
+    return roundUsd(explicitCost);
   }
 
+  const nightlyUsd = toNonNegativeUsd(option.nightlyUsd);
+  const nights = toNonNegativeCount(option.nights);
   if (
-    typeof option.nightlyUsd === "number" &&
-    Number.isFinite(option.nightlyUsd) &&
-    typeof option.nights === "number" &&
-    Number.isFinite(option.nights)
+    nightlyUsd !== null &&
+    nights !== null
   ) {
-    return Number((option.nightlyUsd * option.nights).toFixed(2));
+    return roundUsd(nightlyUsd * nights);
   }
 
+  const dailyRateUsd = toNonNegativeUsd(option.dailyRateUsd);
+  const rentalDays = toNonNegativeCount(option.rentalDays);
   if (
-    typeof option.dailyRateUsd === "number" &&
-    Number.isFinite(option.dailyRateUsd) &&
-    typeof option.rentalDays === "number" &&
-    Number.isFinite(option.rentalDays)
+    dailyRateUsd !== null &&
+    rentalDays !== null
   ) {
-    return Number((option.dailyRateUsd * option.rentalDays).toFixed(2));
+    return roundUsd(dailyRateUsd * rentalDays);
   }
 
   return 0;
+}
+
+function toNonNegativeUsd(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function toNonNegativeCount(value) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function roundUsd(value) {
+  return Number(value.toFixed(2));
 }
 
 function extractAgentText(result) {
