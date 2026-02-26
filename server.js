@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { randomUUID } from "crypto";
 import {
   buildItineraryDraft,
+  computeSelectedCostSummary,
   createFinalReview,
   validateTripRequest,
   TRIP_COMPONENTS
@@ -194,7 +195,8 @@ app.post("/api/confirm-component", async (req, res) => {
     traceId: record.traceId,
     confirmations: record.confirmations,
     nextComponentToConfirm: remainingComponent,
-    finalReview: record.finalReview ?? null
+    finalReview: record.finalReview ?? null,
+    selectedCostSummary: computeSelectedCostSummary(record.itinerary, record.confirmations)
   });
 });
 
@@ -234,7 +236,8 @@ app.post("/api/final-confirmation", (req, res) => {
     message: approved
       ? "Final itinerary confirmed. No purchases were made."
       : "Final itinerary was not approved. No purchases were made.",
-    noPurchasePolicy: "At this stage, nothing is purchased."
+    noPurchasePolicy: "At this stage, nothing is purchased.",
+    selectedCostSummary: computeSelectedCostSummary(record.itinerary, record.confirmations)
   });
 });
 
@@ -280,7 +283,8 @@ app.post("/api/reset-confirmations", (req, res) => {
     itineraryId,
     confirmations: record.confirmations,
     nextComponentToConfirm: nextComponentToConfirm(record.confirmations),
-    finalReview: null
+    finalReview: null,
+    selectedCostSummary: computeSelectedCostSummary(record.itinerary, record.confirmations)
   });
 });
 

@@ -432,21 +432,7 @@ function normalizeComponent(component, fallbackOptions, fallbackQuestion) {
 }
 
 function estimateTotals(itinerary) {
-  const flightUsd = optionCostById(itinerary.components.flight);
-  const hotelUsd = optionCostById(itinerary.components.hotel);
-  const carRentalUsd = optionCostById(itinerary.components.carRental);
-
-  const activitiesUsd = Array.isArray(itinerary.activities)
-    ? itinerary.activities.reduce((sum, activity) => sum + Number(activity.estimatedCostUsd || 0), 0)
-    : 0;
-
-  return {
-    flightUsd,
-    hotelUsd,
-    carRentalUsd,
-    activitiesUsd,
-    totalUsd: Number((flightUsd + hotelUsd + carRentalUsd + activitiesUsd).toFixed(2))
-  };
+  return computeSelectedCostSummary(itinerary);
 }
 
 function optionCostById(component) {
@@ -454,6 +440,33 @@ function optionCostById(component) {
   const recommendedId = component.recommendedOptionId ?? component.options[0].id;
   const option = component.options.find((item) => item.id === recommendedId) ?? component.options[0];
   return computeOptionCostUsd(option);
+}
+
+export function computeSelectedCostSummary(itinerary, confirmations = {}) {
+  const optionCostBySelection = (componentType) => {
+    const component = itinerary?.components?.[componentType];
+    if (!component?.options?.length) return 0;
+
+    const selectedOptionId =
+      confirmations?.[componentType]?.optionId ?? component.recommendedOptionId ?? component.options[0]?.id;
+    const selectedOption = component.options.find((item) => item.id === selectedOptionId) ?? component.options[0];
+    return computeOptionCostUsd(selectedOption);
+  };
+
+  const flightUsd = optionCostBySelection("flight");
+  const hotelUsd = optionCostBySelection("hotel");
+  const carRentalUsd = optionCostBySelection("carRental");
+  const activitiesUsd = Array.isArray(itinerary?.activities)
+    ? roundUsd(itinerary.activities.reduce((sum, activity) => sum + Number(activity.estimatedCostUsd || 0), 0))
+    : 0;
+
+  return {
+    flightUsd,
+    hotelUsd,
+    carRentalUsd,
+    activitiesUsd,
+    totalUsd: roundUsd(flightUsd + hotelUsd + carRentalUsd + activitiesUsd)
+  };
 }
 
 export function computeOptionCostUsd(option) {
