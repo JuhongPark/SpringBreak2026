@@ -14,4 +14,4 @@
 
 ## Residual risk
 - Frontend synchronization behavior is currently validated via manual flow checks, not browser automation.
-- A future round can add UI integration tests for summary transitions across confirm/cancel/reject flows.
+- UI integration tests for summary transitions across confirm/cancel/reject flows are out of current scope.

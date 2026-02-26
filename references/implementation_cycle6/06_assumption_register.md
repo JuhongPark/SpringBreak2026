@@ -3,10 +3,10 @@
 | # | Assumption | Failure signal | Validation method | Owner |
 |---|---|---|---|---|
 | 1 | Query overrides should not break default behavior | anomaly output drift | tests with and without overrides | Engineering |
-| 2 | Recommended actions improve operator response time | no practical usage | feedback next cycle | Engineering |
+| 2 | Recommended actions improve operator response time | no practical usage | feedback review | Engineering |
 | 3 | Severity counts are enough for first-pass triage | unresolved prioritization | incident drill review | Engineering |
 | 4 | Numeric query parsing should ignore invalid values safely | crash or NaN thresholds | parser behavior check | Engineering |
-| 5 | Threshold flexibility reduces false positives | alert noise unchanged | threshold tuning trial later | Engineering |
+| 5 | Threshold flexibility reduces false positives | alert noise unchanged | threshold tuning trial | Engineering |
 | 6 | Endpoint compatibility remains intact | regression in anomalies route | route smoke + test suite | Engineering |
 | 7 | Static rule recommendations are acceptable for now | misleading recommendations | review with real traces | Engineering |
 | 8 | Existing anomaly rules remain deterministic | flaky outputs | repeated tests | Engineering |

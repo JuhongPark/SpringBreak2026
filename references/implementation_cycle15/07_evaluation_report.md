@@ -13,4 +13,4 @@
 
 ## Residual risk
 - End-to-end UI/API interaction tests for pricing are still manual.
-- Additional edge cases (decimal rounding in mixed payloads) can be expanded in future tests.
+- Additional edge cases (decimal rounding in mixed payloads) are out of current test scope.

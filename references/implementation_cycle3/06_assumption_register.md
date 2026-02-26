@@ -8,7 +8,7 @@
 | 4 | Missing timestamp should not crash summary | runtime exception | empty/malformed input test | Engineering |
 | 5 | Endpoint should return 404 for unknown trace | misleading 200/500 | API path error handling review | Engineering |
 | 6 | Endpoint should keep full replay endpoint intact | regression on `/api/traces/:traceId` | syntax + runtime review | Engineering |
-| 7 | Aggregated view should reduce inspection time | operators still scan raw first | team feedback in next cycle | Engineering |
+| 7 | Aggregated view should reduce inspection time | operators still scan raw first | team feedback in regular review | Engineering |
 | 8 | Summary logic should be unit-testable independent of server | hard-to-test behavior | isolated utility module test | Engineering |
 | 9 | Summary fields should be stable for dashboards | frequent schema churn | contract check in docs | Engineering |
-|10| Event status/type fields are sufficient for first-pass diagnosis | unknown-only counts | monitor real traces next cycle | Engineering |
+|10| Event status/type fields are sufficient for first-pass diagnosis | unknown-only counts | monitor real traces in routine review | Engineering |

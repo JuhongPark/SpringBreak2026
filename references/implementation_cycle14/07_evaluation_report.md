@@ -15,8 +15,3 @@
 ## Residual risk
 - Frontend interaction matrix is documented but not yet automated with browser-level tests.
 - Hero visual acceptance still depends on evaluator preference beyond baseline readability checks.
-
-## Feedback Items For Next Round
-- Add automated browser test coverage for confirm/cancel/reselect and final reject reset.
-- Add a lightweight visual regression baseline for hero + form readability.
-- Expand cost-summary tests to cover edge-case option payloads.

@@ -14,4 +14,4 @@
 
 ## Residual risk
 - Frontend currently computes summary locally and does not consume `selectedCostSummary` response field yet.
-- End-to-end UI tests for confirm/reset/final response rendering remain a future improvement.
+- End-to-end UI tests for confirm/reset/final response rendering are out of current scope.

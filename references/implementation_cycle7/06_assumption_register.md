@@ -9,6 +9,6 @@
 | 5 | Profile metadata should be visible in response | missing profile field | API contract check | Engineering |
 | 6 | Existing anomaly behavior remains compatible | regression in anomalies route | full test suite | Engineering |
 | 7 | Recommendations still map correctly after profile addition | empty actions | recommendation tests | Engineering |
-| 8 | Profile logic remains easy to tune later | rigid hardcoding pain | centralized profile table review | Engineering |
+| 8 | Profile logic remains easy to tune | rigid hardcoding pain | centralized profile table review | Engineering |
 | 9 | Overrides should not require all params | incomplete override failure | partial override test | Engineering |
 |10| Documentation should prevent misuse | incorrect query usage | README review | Engineering |

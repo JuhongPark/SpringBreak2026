@@ -10,5 +10,5 @@
 | 6 | Health endpoint should mirror anomaly threshold controls | mismatched behavior | endpoint contract review | Engineering |
 | 7 | Score formula should remain simple and transparent | opaque logic complaints | formula docs in code review | Engineering |
 | 8 | Existing endpoints remain unaffected | regressions in summary/report/anomalies | full test suite | Engineering |
-| 9 | API consumers can use status + score quickly | adoption issues | feedback next cycle | Engineering |
-|10| Additional endpoint overhead is acceptable | noticeable latency increase | future perf check | Engineering |
+| 9 | API consumers can use status + score quickly | adoption issues | feedback review | Engineering |
+|10| Additional endpoint overhead is acceptable | noticeable latency increase | perf check | Engineering |

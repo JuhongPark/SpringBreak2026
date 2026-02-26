@@ -11,4 +11,4 @@
 - trace analytics (summary/report/anomalies + overrides): PASS
 
 ## Residual risk
-- Recommendations are rule-based templates and may need contextual enrichment later.
+- Recommendations are rule-based templates; contextual enrichment is out of current scope.

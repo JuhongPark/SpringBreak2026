@@ -13,4 +13,4 @@
 
 ## Residual risk
 - Browser-level integration tests for displayed totals after UI interactions are still manual.
-- Upstream schema constraints for activity cost types can be tightened in a future round.
+- Upstream schema constraints for activity cost types are out of current scope.

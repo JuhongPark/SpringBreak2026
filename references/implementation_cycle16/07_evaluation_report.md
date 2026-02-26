@@ -14,4 +14,4 @@
 
 ## Residual risk
 - Pricing parity is validated by helper tests plus manual UI checks, not full browser automation yet.
-- Future work can add end-to-end assertions for displayed totals after UI re-selection flows.
+- End-to-end assertions for displayed totals after UI re-selection flows are out of current scope.

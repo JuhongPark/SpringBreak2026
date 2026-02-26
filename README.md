@@ -4,17 +4,19 @@ Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Br
 
 ![Main Screen](public/assets/images/readme-main-screen.png)
 
-## Project Motto
+## Project Goal
 
-We trust the system to plan well, so our core goal is to clearly visualize how the `@openai/agents` SDK and each agent actually operate.
+The project goal is to clearly verify and visualize how the `@openai/agents` SDK and each agent actually operate.
 
 <img src="public/assets/images/readme-agent-dag.png" alt="Execution DAG" width="544" />
 
-## Improvements
+## Key Improvements
 
-- Enhanced visualization for agent and tool execution flows
-- Improved service UI for clearer planning and confirmation experience
-- Expanded automated test coverage across the project (for example, option-cost calculation and pricing edge cases)
+- Clearer runtime transparency with timeline, tool monitor, and DAG views
+- Better decision flow with component-level confirm/cancel and final approve/reject handling
+- More reliable cost feedback by recalculating selected option totals during confirmations
+- Stronger planning-state feedback with live progress messages and elapsed-time display
+- Expanded automated coverage for core reliability paths (including pricing and edge-case behavior)
 
 ## Core Capabilities
 

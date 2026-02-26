@@ -10,5 +10,5 @@
 | 6 | Reject should reset all confirmations for clean restart | partial stale confirmation remains | API response + UI state check | Engineering |
 | 7 | New reset endpoint does not regress existing confirmation routes | 4xx/5xx spikes on confirmation path | endpoint smoke test | Engineering |
 | 8 | Hero/branding changes should not reduce form readability | low contrast in core form area | visual QA on desktop/mobile | Engineering |
-| 9 | Key/value formatting improves option detail clarity vs raw JSON | users request raw JSON fallback frequently | review notes in next round | Engineering |
-|10| Existing tests are sufficient to detect core regressions | bug escapes in UI state handling | next-cycle targeted tests | Engineering |
+| 9 | Key/value formatting improves option detail clarity vs raw JSON | users request raw JSON fallback frequently | review notes | Engineering |
+|10| Existing tests are sufficient to detect core regressions | bug escapes in UI state handling | targeted tests | Engineering |

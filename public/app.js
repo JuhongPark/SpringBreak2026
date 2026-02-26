@@ -448,11 +448,16 @@ function buildActivityItem(event) {
     .filter(Boolean)
     .join("");
 
-  const debugDetails = [
+  const modelAndToolDetails = [
     renderDetailBlock("Prompt", event.prompt),
     renderDetailBlock("Response", event.response),
     renderDetailBlock("Tool Arguments", event.arguments),
-    renderDetailBlock("Tool Output", event.output),
+    renderDetailBlock("Tool Output", event.output)
+  ]
+    .filter(Boolean)
+    .join("");
+
+  const debugDetails = [
     renderDetailBlock("Raw LLM Run Item", event.rawItem),
     renderDetailBlock("Full Event JSON", safeStringify(event))
   ]
@@ -468,6 +473,7 @@ function buildActivityItem(event) {
     <div>${escapeHtml(title)}</div>
     ${summary}
     ${safeDetails}
+    ${modelAndToolDetails}
     ${DEBUG_MODE ? debugDetails : ""}
   `;
 
@@ -489,8 +495,8 @@ function buildToolMonitorItem(event) {
     renderDetailBlock("Source", event.source),
     renderDetailBlock("Family", event.toolFamily),
     renderDetailBlock("Phase", event.phase),
-    DEBUG_MODE ? renderDetailBlock("Arguments", event.arguments) : "",
-    DEBUG_MODE ? renderDetailBlock("Output", event.output) : "",
+    renderDetailBlock("Arguments", event.arguments),
+    renderDetailBlock("Output", event.output),
     DEBUG_MODE ? renderDetailBlock("Raw Item", event.rawItem) : "",
     DEBUG_MODE ? renderDetailBlock("Full Event JSON", safeStringify(event)) : ""
   ]

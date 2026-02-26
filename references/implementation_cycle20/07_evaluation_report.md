@@ -12,5 +12,5 @@
 - `npm test`: PASS (`pass=4`, `fail=0`)
 
 ## Residual risk
-- Rounding policy (`Math.round`) is deterministic but still a business choice; future cycles may switch to ceil/floor by policy decision.
+- Rounding policy (`Math.round`) is deterministic but still a business choice; alternative policies (ceil/floor) are out of current scope.
 - Browser-level UI tests for displayed totals remain manual.

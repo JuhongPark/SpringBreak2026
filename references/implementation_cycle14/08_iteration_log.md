@@ -12,7 +12,7 @@
 
 ## Iteration 3
 - Executed verification commands and finalized evaluation/report artifacts (`07`, `08`).
-- Recorded next-round feedback priorities for automation and visual regression.
+- Recorded feedback priorities for automation and visual regression.
 - Result: cycle closed.
 
 ## Verification

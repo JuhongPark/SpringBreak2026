@@ -10,4 +10,4 @@ Deterministic handling of fractional count fields in pricing calculations.
 ## Patterns extracted
 1. Count-like fields should be normalized to integers before arithmetic.
 2. Normalization rules must be explicit and shared across layers.
-3. Edge-case tests should pin rounding behavior for future changes.
+3. Edge-case tests should pin rounding behavior consistently.
