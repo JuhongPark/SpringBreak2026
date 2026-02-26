@@ -13,11 +13,12 @@
           <div class="brand-logo">GenBooking.com</div>
         </div>
         <nav class="brand-nav" aria-label="Travel categories">
-          <span>Stays</span>
-          <span>Flights</span>
-          <span>Flight + Hotel</span>
-          <span>Car rental</span>
-          <span>Attractions</span>
+          <button type="button" class="brand-nav-chip" data-coming-soon="Stays">Stays</button>
+          <button type="button" class="brand-nav-chip" data-coming-soon="Flights">Flights</button>
+          <button type="button" class="brand-nav-chip" data-coming-soon="Flight + Hotel">Flight + Hotel</button>
+          <button type="button" class="brand-nav-chip" data-coming-soon="Car rental">Car rental</button>
+          <button type="button" class="brand-nav-chip" data-coming-soon="Attractions">Attractions</button>
+          <div id="coming-soon-bubble" class="coming-soon-bubble hidden" role="status" aria-live="polite"></div>
         </nav>
       </header>
 
@@ -31,7 +32,7 @@
             app.
           </p>
           <p>
-            My goal is to clearly visualize how the `@openai/agents` SDK and each
+            The goal is to clearly visualize how the `@openai/agents` SDK and each
             agent actually operate.
           </p>
         </div>

@@ -7,8 +7,22 @@ const toolMonitorSection = document.getElementById("tool-monitor");
 const toolMonitorList = document.getElementById("tool-monitor-list");
 const dagViewSection = document.getElementById("dag-view");
 const dagCanvas = document.getElementById("dag-canvas");
+const brandNav = document.querySelector(".brand-nav");
+const comingSoonBubble = document.getElementById("coming-soon-bubble");
 const DEBUG_MODE = new URLSearchParams(window.location.search).get("debug") === "1";
 const COMPONENT_TYPES = ["flight", "hotel", "carRental"];
+const GENERATING_MESSAGES = [
+  "Our agents are working hard on your trip plan...",
+  "Travel agents in progress: building your perfect itinerary...",
+  "Tiny planners are comparing flights, hotels, and fun things to do...",
+  "Your trip squad is cooking up a smart draft itinerary...",
+  "Agents are exploring options and polishing your schedule...",
+  "Hang tight, your travel plan is being assembled with care...",
+  "We are matching routes, stays, and activities for your journey...",
+  "Your itinerary is in progress: agents are checking details now...",
+  "Our planning agents are busy making your trip smoother...",
+  "Almost there, your customized trip draft is on the way..."
+];
 
 const TOOL_MONITOR_TYPES = new Set([
   "tool_call_started",
@@ -29,6 +43,16 @@ let selectedOptionsByComponent = {};
 let confirmedComponents = {};
 let finalReviewState = null;
 let serverSelectedCostSummary = null;
+let finalDecisionState = null;
+let generatingMessageBase = "";
+let generatingStartedAt = null;
+let generatingTimerId = null;
+let comingSoonHideTimerId = null;
+let finalReviewOverlayEl = null;
+const activeAgentWork = new Map();
+const activeToolWork = new Map();
+
+initComingSoonBubbles();
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -38,17 +62,21 @@ form.addEventListener("submit", async (event) => {
   submitButton.disabled = true;
   resetTimeline();
   itinerarySection.classList.add("hidden");
-  setMessage("Generating itinerary with agents...");
+  startGeneratingMessageClock();
 
   try {
     const data = await streamPlan(payload);
+    const elapsedSeconds = stopGeneratingMessageClock();
 
     currentPlan = data;
     initializeSelectionState(data);
-    setMessage(`Draft itinerary created. Trace ID: ${data.traceId || "n/a"}. Please confirm each component.`);
+    setMessage(
+      `Draft itinerary created in ${elapsedSeconds}s. Trace ID: ${data.traceId || "n/a"}. Please confirm each component.`
+    );
     renderItinerary();
   } catch (error) {
-    setMessage(error.message || "Unexpected error", true);
+    const elapsedSeconds = stopGeneratingMessageClock();
+    setMessage(`${error.message || "Unexpected error"} (after ${elapsedSeconds}s)`, true);
   } finally {
     submitButton.disabled = false;
   }
@@ -149,11 +177,13 @@ function resetTimeline() {
   renderDagView();
   renderActivityTimeline();
   renderToolMonitorTimeline();
+  clearActiveWorkItems();
 }
 
 function addActivity(eventData) {
   const event = eventData ?? {};
   const eventType = event.type || "activity";
+  updateActiveWorkItems(event);
   activityEvents.push(event);
   renderDagView();
   renderActivityTimeline();
@@ -161,6 +191,10 @@ function addActivity(eventData) {
   if (TOOL_MONITOR_TYPES.has(eventType)) {
     toolMonitorEvents.push(event);
     renderToolMonitorTimeline();
+  }
+
+  if (generatingTimerId !== null) {
+    renderGeneratingMessage();
   }
 }
 
@@ -543,11 +577,282 @@ function setMessage(message, isError = false) {
   messagesSection.innerHTML = `<p class="${isError ? "" : "muted"}">${escapeHtml(message)}</p>`;
 }
 
+function startGeneratingMessageClock() {
+  stopGeneratingMessageClock();
+  generatingMessageBase = randomGeneratingMessage();
+  generatingStartedAt = Date.now();
+  clearActiveWorkItems();
+  renderGeneratingMessage();
+  generatingTimerId = window.setInterval(() => {
+    renderGeneratingMessage();
+  }, 1000);
+}
+
+function stopGeneratingMessageClock() {
+  const elapsedSeconds = currentGeneratingElapsedSeconds();
+  if (generatingTimerId !== null) {
+    window.clearInterval(generatingTimerId);
+    generatingTimerId = null;
+  }
+  generatingStartedAt = null;
+  generatingMessageBase = "";
+  return elapsedSeconds;
+}
+
+function currentGeneratingElapsedSeconds() {
+  if (!generatingStartedAt) return 0;
+  return Math.max(0, Math.floor((Date.now() - generatingStartedAt) / 1000));
+}
+
+function clearActiveWorkItems() {
+  activeAgentWork.clear();
+  activeToolWork.clear();
+}
+
+function updateActiveWorkItems(event) {
+  const type = String(event?.type || "");
+  const stage = String(event?.stage || "general");
+  const agentName = String(event?.agent || "UnknownAgent");
+  const toolName = String(event?.toolName || "unknown_tool");
+  const eventTime = event?.timestamp || new Date().toISOString();
+
+  if (type === "agent_invoked" || type === "retry_started" || type === "prompt_sent") {
+    upsertWork(activeAgentWork, `agent:${agentName}:${stage}`, {
+      stage,
+      type,
+      status: "started",
+      title: `[${type}] ${agentName}`,
+      timestamp: eventTime
+    });
+    return;
+  }
+
+  if (type === "agent_completed") {
+    upsertWork(activeAgentWork, `agent:${agentName}:${stage}`, {
+      stage,
+      type,
+      status: "completed",
+      title: `[${type}] ${agentName}`,
+      timestamp: eventTime
+    });
+    return;
+  }
+
+  if (type === "tool_call_started" || type === "tool_called" || type === "web_search_called") {
+    upsertWork(activeToolWork, `tool:${toolName}:${agentName}:${stage}`, {
+      stage,
+      type,
+      status: "started",
+      title: `[${type}] ${toolName} via ${agentName}`,
+      timestamp: eventTime
+    });
+    return;
+  }
+
+  if (type === "tool_call_completed" || type === "tool_output" || type === "web_search_output") {
+    upsertWork(activeToolWork, `tool:${toolName}:${agentName}:${stage}`, {
+      stage,
+      type,
+      status: "completed",
+      title: `[${type}] ${toolName} via ${agentName}`,
+      timestamp: eventTime
+    });
+    return;
+  }
+
+  if (type === "tool_call_failed") {
+    upsertWork(activeToolWork, `tool:${toolName}:${agentName}:${stage}`, {
+      stage,
+      type,
+      status: "failed",
+      title: `[${type}] ${toolName} via ${agentName}`,
+      timestamp: eventTime
+    });
+    return;
+  }
+
+  if (type === "planning_completed" || type === "planning_failed" || type === "stream_done") {
+    markStartedAsCompleted(activeAgentWork, eventTime);
+    markStartedAsCompleted(activeToolWork, eventTime);
+  }
+}
+
+function upsertWork(map, key, payload) {
+  const current = map.get(key);
+  if (!current) {
+    map.set(key, { ...payload, count: 1 });
+    return;
+  }
+  const nextCount = payload.status === "started" ? current.count + 1 : current.count;
+  map.set(key, { ...current, ...payload, count: nextCount });
+}
+
+function markStartedAsCompleted(map, timestamp) {
+  for (const [key, item] of map.entries()) {
+    if (item.status === "started") {
+      map.set(key, { ...item, status: "completed", timestamp });
+    }
+  }
+}
+
+function renderGeneratingMessage() {
+  const elapsed = currentGeneratingElapsedSeconds();
+  const agentItems = Array.from(activeAgentWork.values());
+  const toolItems = Array.from(activeToolWork.values());
+
+  const toCards = (items) =>
+    items
+      .map((item) => {
+        const statusMeta = getStatusMeta(item.status || "started");
+        const detail = item.count > 1 ? `${item.count} events` : "1 event";
+        return `
+          <li class="activity-item">
+            <div class="event-status-row">
+              <span class="status-pill ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
+            </div>
+            <div class="activity-time">${escapeHtml(formatEventTime(item.timestamp))} • ${escapeHtml(item.stage)}</div>
+            <div>${escapeHtml(item.title)}</div>
+            <div class="muted">${escapeHtml(detail)}</div>
+          </li>
+        `;
+      })
+      .join("");
+
+  const toolBlock = toolItems.length
+    ? `<div class="muted"><strong>Tools</strong></div><ul class="list">${toCards(toolItems)}</ul>`
+    : "";
+  const agentBlock = agentItems.length
+    ? `<div class="muted"><strong>Agents</strong></div><ul class="list">${toCards(agentItems)}</ul>`
+    : "";
+  const fallback = !agentBlock && !toolBlock ? '<p class="muted">Waiting for runtime events...</p>' : "";
+
+  messagesSection.classList.remove("hidden");
+  messagesSection.innerHTML = `
+    <p class="muted">${escapeHtml(generatingMessageBase)} (${elapsed}s)</p>
+    ${toolBlock}
+    ${agentBlock}
+    ${fallback}
+  `;
+}
+
+function randomGeneratingMessage() {
+  const index = Math.floor(Math.random() * GENERATING_MESSAGES.length);
+  return GENERATING_MESSAGES[index];
+}
+
+function initComingSoonBubbles() {
+  if (!brandNav || !comingSoonBubble) return;
+
+  brandNav.querySelectorAll(".brand-nav-chip").forEach((chip) => {
+    chip.addEventListener("click", () => {
+      showComingSoonBubble(chip);
+    });
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!(event.target instanceof Element)) return;
+    if (event.target.closest(".brand-nav-chip")) return;
+    if (event.target.closest("#coming-soon-bubble")) return;
+    hideComingSoonBubble();
+  });
+}
+
+function showComingSoonBubble(chip) {
+  if (!brandNav || !comingSoonBubble) return;
+  const chipRect = chip.getBoundingClientRect();
+  const navRect = brandNav.getBoundingClientRect();
+  const chipLabel = chip.getAttribute("data-coming-soon") || chip.textContent || "This feature";
+  comingSoonBubble.textContent = `${chipLabel}: Coming soon`;
+  comingSoonBubble.classList.remove("hidden");
+  const left = chipRect.left - navRect.left + chipRect.width / 2;
+  const top = chipRect.top - navRect.top;
+  comingSoonBubble.style.left = `${left}px`;
+  comingSoonBubble.style.top = `${top}px`;
+
+  if (comingSoonHideTimerId !== null) {
+    window.clearTimeout(comingSoonHideTimerId);
+  }
+  comingSoonHideTimerId = window.setTimeout(() => {
+    hideComingSoonBubble();
+  }, 1800);
+}
+
+function hideComingSoonBubble() {
+  if (!comingSoonBubble) return;
+  comingSoonBubble.classList.add("hidden");
+  if (comingSoonHideTimerId !== null) {
+    window.clearTimeout(comingSoonHideTimerId);
+    comingSoonHideTimerId = null;
+  }
+}
+
+function ensureFinalReviewOverlay() {
+  if (finalReviewOverlayEl) return finalReviewOverlayEl;
+  finalReviewOverlayEl = document.createElement("div");
+  finalReviewOverlayEl.className = "final-review-overlay hidden";
+  finalReviewOverlayEl.innerHTML = `
+    <div class="final-review-overlay-card">
+      <div class="final-review-spinner" aria-hidden="true"></div>
+      <div class="event-status-row">
+        <span id="final-review-overlay-pill" class="status-pill status-started">STARTED</span>
+      </div>
+      <p id="final-review-overlay-text" class="muted">FinalReviewAgent started.</p>
+    </div>
+  `;
+  document.body.appendChild(finalReviewOverlayEl);
+  return finalReviewOverlayEl;
+}
+
+function showFinalReviewOverlayStarted() {
+  const overlay = ensureFinalReviewOverlay();
+  const pill = document.getElementById("final-review-overlay-pill");
+  const text = document.getElementById("final-review-overlay-text");
+  const spinner = overlay.querySelector(".final-review-spinner");
+  overlay.classList.remove("hidden");
+  if (pill) {
+    pill.textContent = "STARTED";
+    pill.className = "status-pill status-started";
+  }
+  if (text) {
+    text.textContent = "FinalReviewAgent started.";
+  }
+  spinner?.classList.remove("hidden");
+}
+
+function showFinalReviewOverlayCompleted() {
+  const overlay = ensureFinalReviewOverlay();
+  const pill = document.getElementById("final-review-overlay-pill");
+  const text = document.getElementById("final-review-overlay-text");
+  const spinner = overlay.querySelector(".final-review-spinner");
+
+  if (pill) {
+    pill.textContent = "COMPLETED";
+    pill.className = "status-pill status-completed";
+  }
+  if (text) {
+    text.textContent = "FinalReviewAgent completed.";
+  }
+  spinner?.classList.add("hidden");
+
+  return new Promise((resolve) => {
+    window.setTimeout(() => {
+      hideFinalReviewOverlay();
+      resolve();
+    }, 1800);
+  });
+}
+
+function hideFinalReviewOverlay() {
+  if (!finalReviewOverlayEl) return;
+  finalReviewOverlayEl.classList.add("hidden");
+}
+
 function initializeSelectionState(planData) {
   selectedOptionsByComponent = {};
   confirmedComponents = {};
   finalReviewState = null;
   serverSelectedCostSummary = null;
+  finalDecisionState = null;
 
   const itinerary = planData?.itinerary ?? {};
   COMPONENT_TYPES.forEach((componentType) => {
@@ -561,6 +866,7 @@ function initializeSelectionState(planData) {
 function renderItinerary() {
   if (!currentPlan?.itinerary) return;
   const itinerary = currentPlan.itinerary;
+  const isFinalLocked = finalDecisionState === "approved";
   itinerarySection.classList.remove("hidden");
 
   itinerarySection.innerHTML = `
@@ -596,7 +902,7 @@ function renderItinerary() {
             <div class="inline">
               <input type="radio" name="${componentType}-option" value="${escapeHtml(option.id)}" ${
           option.id === selectedOptionId ? "checked" : ""
-        } ${isConfirmed ? "disabled" : ""} />
+        } ${isConfirmed || isFinalLocked ? "disabled" : ""} />
               <strong>${escapeHtml(option.label || option.id)}</strong>
             </div>
             <div class="muted">${escapeHtml(option.notes || "")}</div>
@@ -611,10 +917,12 @@ function renderItinerary() {
       <p>${escapeHtml(component.confirmationQuestion || "Please confirm this option")}</p>
       <div class="component-options">${optionsHtml}</div>
       <div class="inline">
-        <button data-component="${componentType}" class="confirm-btn" ${isConfirmed ? "disabled" : ""}>${
+        <button data-component="${componentType}" class="confirm-btn" ${isConfirmed || isFinalLocked ? "disabled" : ""}>${
           isConfirmed ? `Confirmed ${escapeHtml(componentType)}` : `Confirm ${escapeHtml(componentType)}`
         }</button>
-        <button data-component="${componentType}" class="secondary cancel-btn" ${isConfirmed ? "" : "disabled"}>Cancel ${
+        <button data-component="${componentType}" class="secondary cancel-btn" ${
+          isConfirmed && !isFinalLocked ? "" : "disabled"
+        }>Cancel ${
           escapeHtml(componentType)
         }</button>
       </div>
@@ -639,6 +947,7 @@ function attachComponentHandlers() {
 
   document.querySelectorAll(".confirm-btn").forEach((button) => {
     button.addEventListener("click", async () => {
+      if (finalDecisionState === "approved") return;
       const componentType = button.getAttribute("data-component");
       const selectedOptionId = selectedOptionsByComponent[componentType];
       if (!selectedOptionId) {
@@ -647,6 +956,12 @@ function attachComponentHandlers() {
       }
 
       button.disabled = true;
+      const willTriggerFinalReview = COMPONENT_TYPES
+        .filter((type) => type !== componentType)
+        .every((type) => Boolean(confirmedComponents[type]));
+      if (willTriggerFinalReview) {
+        showFinalReviewOverlayStarted();
+      }
 
       try {
         const response = await fetch("/api/confirm-component", {
@@ -666,15 +981,21 @@ function attachComponentHandlers() {
 
         serverSelectedCostSummary = normalizeServerCostSummary(data.selectedCostSummary);
         confirmedComponents[componentType] = true;
+        finalDecisionState = null;
         if (!data.nextComponentToConfirm) {
+          if (willTriggerFinalReview) {
+            await showFinalReviewOverlayCompleted();
+          }
           finalReviewState = data.finalReview ?? null;
           setMessage("All components confirmed. Please review final summary.");
         } else {
+          hideFinalReviewOverlay();
           finalReviewState = null;
           setMessage(`Confirmed ${componentType}. Next: confirm ${data.nextComponentToConfirm}.`);
         }
         renderItinerary();
       } catch (error) {
+        hideFinalReviewOverlay();
         button.disabled = false;
         setMessage(error.message || "Unexpected confirmation error", true);
       }
@@ -683,6 +1004,7 @@ function attachComponentHandlers() {
 
   document.querySelectorAll(".cancel-btn").forEach((button) => {
     button.addEventListener("click", async () => {
+      if (finalDecisionState === "approved") return;
       const componentType = button.getAttribute("data-component");
       if (!componentType) return;
       button.disabled = true;
@@ -703,6 +1025,7 @@ function attachComponentHandlers() {
 
         serverSelectedCostSummary = normalizeServerCostSummary(data.selectedCostSummary);
         confirmedComponents[componentType] = false;
+        finalDecisionState = null;
         finalReviewState = null;
         setMessage(`Canceled ${componentType} confirmation. Please select and confirm again.`);
         renderItinerary();
@@ -728,9 +1051,16 @@ function maybeRenderFinalAction() {
     <p>${escapeHtml(finalReviewState.finalSummary || "")}</p>
     <p><strong>${escapeHtml(finalReviewState.finalConfirmationQuestion || "Confirm final itinerary?")}</strong></p>
     <p class="muted">${escapeHtml(finalReviewState.purchaseReminder || "No purchases are made")}</p>
+    ${
+      finalDecisionState === "approved"
+        ? '<p><strong>Approved.</strong> No purchases are made, so you can relax.</p>'
+        : ""
+    }
     <div class="inline">
-      <button id="final-approve">Approve Final Itinerary</button>
-      <button id="final-reject" class="secondary">Reject Final Itinerary</button>
+      <button id="final-approve" ${finalDecisionState === "approved" ? "disabled" : ""}>${
+        finalDecisionState === "approved" ? "Approved" : "Approve Final Itinerary"
+      }</button>
+      <button id="final-reject" class="secondary" ${finalDecisionState === "approved" ? "disabled" : ""}>Reject Final Itinerary</button>
     </div>
   `;
 
@@ -759,7 +1089,9 @@ async function submitFinalDecision(approved) {
     updateCostSummary();
 
     if (approved) {
-      setMessage("Congratulations! Your final itinerary is approved. No purchases were made, so you can relax.");
+      finalDecisionState = "approved";
+      renderItinerary();
+      setMessage("Final itinerary approved. No purchases are made, so you can relax.");
       return;
     }
 
@@ -777,6 +1109,7 @@ async function submitFinalDecision(approved) {
     COMPONENT_TYPES.forEach((componentType) => {
       confirmedComponents[componentType] = false;
     });
+    finalDecisionState = null;
     finalReviewState = null;
     setMessage("Final itinerary rejected. All confirmations were cleared. Please choose options again. No purchases were made.");
     renderItinerary();

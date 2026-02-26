@@ -63,13 +63,47 @@ body {
   gap: 10px 16px;
   font-size: 21px;
   font-weight: 600;
+  position: relative;
 }
 
-.brand-nav span {
+.brand-nav-chip {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
   padding: 6px 12px;
   border: 1px solid rgba(209, 227, 255, 0.32);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.08);
+}
+
+.coming-soon-bubble {
+  position: absolute;
+  z-index: 20;
+  left: 0;
+  top: 0;
+  transform: translate(-50%, -120%);
+  background: #ffffff;
+  color: #0a3f98;
+  border: 1px solid #9ec0ff;
+  border-radius: 10px;
+  padding: 8px 10px;
+  font-size: 14px;
+  font-weight: 700;
+  box-shadow: 0 8px 20px rgba(7, 40, 95, 0.25);
+  white-space: nowrap;
+}
+
+.coming-soon-bubble::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: #ffffff;
+  border-right: 1px solid #9ec0ff;
+  border-bottom: 1px solid #9ec0ff;
+  transform: translateX(-50%) rotate(45deg);
 }
 
 .hero-panel {
@@ -337,6 +371,47 @@ button:disabled {
   color: #374151;
   background: #f3f4f6;
   border-color: #d1d5db;
+}
+
+.final-review-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.final-review-overlay.hidden {
+  display: none;
+}
+
+.final-review-overlay-card {
+  width: min(520px, calc(100vw - 32px));
+  background: #ffffff;
+  border: 1px solid #d6deea;
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 18px 40px rgba(2, 6, 23, 0.28);
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+}
+
+.final-review-spinner {
+  width: 28px;
+  height: 28px;
+  border: 3px solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: final-review-spin 0.85s linear infinite;
+}
+
+@keyframes final-review-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .activity-summary {
