@@ -8,6 +8,7 @@ const toolMonitorList = document.getElementById("tool-monitor-list");
 const dagViewSection = document.getElementById("dag-view");
 const dagCanvas = document.getElementById("dag-canvas");
 const DEBUG_MODE = new URLSearchParams(window.location.search).get("debug") === "1";
+const COMPONENT_TYPES = ["flight", "hotel", "carRental"];
 
 const TOOL_MONITOR_TYPES = new Set([
   "tool_call_started",
@@ -24,6 +25,9 @@ const TIMELINE_VISIBLE_LIMIT = 3;
 let currentPlan = null;
 let activityEvents = [];
 let toolMonitorEvents = [];
+let selectedOptionsByComponent = {};
+let confirmedComponents = {};
+let finalReviewState = null;
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -39,8 +43,9 @@ form.addEventListener("submit", async (event) => {
     const data = await streamPlan(payload);
 
     currentPlan = data;
+    initializeSelectionState(data);
     setMessage(`Draft itinerary created. Trace ID: ${data.traceId || "n/a"}. Please confirm each component.`);
-    renderItinerary(currentPlan);
+    renderItinerary();
   } catch (error) {
     setMessage(error.message || "Unexpected error", true);
   } finally {
@@ -537,8 +542,23 @@ function setMessage(message, isError = false) {
   messagesSection.innerHTML = `<p class="${isError ? "" : "muted"}">${escapeHtml(message)}</p>`;
 }
 
-function renderItinerary(planData) {
-  const itinerary = planData.itinerary;
+function initializeSelectionState(planData) {
+  selectedOptionsByComponent = {};
+  confirmedComponents = {};
+  finalReviewState = null;
+
+  const itinerary = planData?.itinerary ?? {};
+  COMPONENT_TYPES.forEach((componentType) => {
+    const component = itinerary.components?.[componentType];
+    const fallbackId = component?.options?.[0]?.id ?? "";
+    selectedOptionsByComponent[componentType] = component?.recommendedOptionId ?? fallbackId;
+    confirmedComponents[componentType] = false;
+  });
+}
+
+function renderItinerary() {
+  if (!currentPlan?.itinerary) return;
+  const itinerary = currentPlan.itinerary;
   itinerarySection.classList.remove("hidden");
 
   itinerarySection.innerHTML = `
@@ -553,14 +573,16 @@ function renderItinerary(planData) {
     <h3>Packing List</h3>
     ${renderSimpleList(itinerary.packingList || [])}
     <h3>Estimated Cost Summary (USD)</h3>
-    ${renderCostSummary(itinerary.estimatedCostSummary || {})}
+    <div id="cost-summary-root">${renderCostSummary(computeEstimatedCostSummary())}</div>
     <div id="final-review"></div>
   `;
 
   const componentsRoot = document.getElementById("components");
-  ["flight", "hotel", "carRental"].forEach((componentType) => {
+  COMPONENT_TYPES.forEach((componentType) => {
     const component = itinerary.components?.[componentType];
     if (!component) return;
+    const isConfirmed = Boolean(confirmedComponents[componentType]);
+    const selectedOptionId = selectedOptionsByComponent[componentType];
 
     const block = document.createElement("section");
     block.className = "card";
@@ -571,8 +593,8 @@ function renderItinerary(planData) {
           <label class="option">
             <div class="inline">
               <input type="radio" name="${componentType}-option" value="${escapeHtml(option.id)}" ${
-          option.id === component.recommendedOptionId ? "checked" : ""
-        } />
+          option.id === selectedOptionId ? "checked" : ""
+        } ${isConfirmed ? "disabled" : ""} />
               <strong>${escapeHtml(option.label || option.id)}</strong>
             </div>
             <div class="muted">${escapeHtml(option.notes || "")}</div>
@@ -586,22 +608,37 @@ function renderItinerary(planData) {
       <h3>${escapeHtml(componentType)}</h3>
       <p>${escapeHtml(component.confirmationQuestion || "Please confirm this option")}</p>
       <div class="component-options">${optionsHtml}</div>
-      <button data-component="${componentType}" class="confirm-btn">Confirm ${escapeHtml(componentType)}</button>
+      <div class="inline">
+        <button data-component="${componentType}" class="confirm-btn" ${isConfirmed ? "disabled" : ""}>${
+          isConfirmed ? `Confirmed ${escapeHtml(componentType)}` : `Confirm ${escapeHtml(componentType)}`
+        }</button>
+        <button data-component="${componentType}" class="secondary cancel-btn" ${isConfirmed ? "" : "disabled"}>Cancel ${
+          escapeHtml(componentType)
+        }</button>
+      </div>
     `;
 
     componentsRoot.appendChild(block);
   });
 
-  attachConfirmHandlers(planData.itineraryId);
-  maybeRenderFinalAction(planData);
+  attachComponentHandlers();
+  maybeRenderFinalAction();
 }
 
-function attachConfirmHandlers(itineraryId) {
+function attachComponentHandlers() {
+  document.querySelectorAll("input[type='radio'][name$='-option']").forEach((input) => {
+    input.addEventListener("change", () => {
+      const componentType = String(input.getAttribute("name") || "").replace(/-option$/, "");
+      selectedOptionsByComponent[componentType] = input.value;
+      updateCostSummary();
+    });
+  });
+
   document.querySelectorAll(".confirm-btn").forEach((button) => {
     button.addEventListener("click", async () => {
       const componentType = button.getAttribute("data-component");
-      const selectedRadio = document.querySelector(`input[name="${componentType}-option"]:checked`);
-      if (!selectedRadio) {
+      const selectedOptionId = selectedOptionsByComponent[componentType];
+      if (!selectedOptionId) {
         setMessage(`Select an option for ${componentType} first.`, true);
         return;
       }
@@ -613,9 +650,9 @@ function attachConfirmHandlers(itineraryId) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            itineraryId,
+            itineraryId: currentPlan.itineraryId,
             componentType,
-            optionId: selectedRadio.value
+            optionId: selectedOptionId
           })
         });
 
@@ -624,34 +661,68 @@ function attachConfirmHandlers(itineraryId) {
           throw new Error(apiErrorMessage(data, "Failed to confirm component"));
         }
 
+        confirmedComponents[componentType] = true;
         if (!data.nextComponentToConfirm) {
+          finalReviewState = data.finalReview ?? null;
           setMessage("All components confirmed. Please review final summary.");
-          maybeRenderFinalAction({ ...currentPlan, finalReview: data.finalReview });
         } else {
+          finalReviewState = null;
           setMessage(`Confirmed ${componentType}. Next: confirm ${data.nextComponentToConfirm}.`);
         }
+        renderItinerary();
       } catch (error) {
         button.disabled = false;
         setMessage(error.message || "Unexpected confirmation error", true);
       }
     });
   });
+
+  document.querySelectorAll(".cancel-btn").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const componentType = button.getAttribute("data-component");
+      if (!componentType) return;
+      button.disabled = true;
+
+      try {
+        const response = await fetch("/api/reset-confirmations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            itineraryId: currentPlan.itineraryId,
+            componentType
+          })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(apiErrorMessage(data, "Failed to cancel confirmation"));
+        }
+
+        confirmedComponents[componentType] = false;
+        finalReviewState = null;
+        setMessage(`Canceled ${componentType} confirmation. Please select and confirm again.`);
+        renderItinerary();
+      } catch (error) {
+        button.disabled = false;
+        setMessage(error.message || "Unexpected cancellation error", true);
+      }
+    });
+  });
 }
 
-function maybeRenderFinalAction(planData) {
+function maybeRenderFinalAction() {
   const finalReviewRoot = document.getElementById("final-review");
   if (!finalReviewRoot) return;
 
-  if (!planData.finalReview) {
+  if (!finalReviewState) {
     finalReviewRoot.innerHTML = "";
     return;
   }
 
   finalReviewRoot.innerHTML = `
     <h3>Final Review</h3>
-    <p>${escapeHtml(planData.finalReview.finalSummary || "")}</p>
-    <p><strong>${escapeHtml(planData.finalReview.finalConfirmationQuestion || "Confirm final itinerary?")}</strong></p>
-    <p class="muted">${escapeHtml(planData.finalReview.purchaseReminder || "No purchases are made")}</p>
+    <p>${escapeHtml(finalReviewState.finalSummary || "")}</p>
+    <p><strong>${escapeHtml(finalReviewState.finalConfirmationQuestion || "Confirm final itinerary?")}</strong></p>
+    <p class="muted">${escapeHtml(finalReviewState.purchaseReminder || "No purchases are made")}</p>
     <div class="inline">
       <button id="final-approve">Approve Final Itinerary</button>
       <button id="final-reject" class="secondary">Reject Final Itinerary</button>
@@ -679,10 +750,76 @@ async function submitFinalDecision(approved) {
     if (!response.ok) {
       throw new Error(apiErrorMessage(data, "Final confirmation failed"));
     }
-    setMessage(data.message);
+
+    if (approved) {
+      setMessage("Congratulations! Your final itinerary is approved. No purchases were made, so you can relax.");
+      return;
+    }
+
+    const resetResponse = await fetch("/api/reset-confirmations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ itineraryId: currentPlan.itineraryId })
+    });
+    const resetData = await resetResponse.json();
+    if (!resetResponse.ok) {
+      throw new Error(apiErrorMessage(resetData, "Failed to reset confirmations after rejection"));
+    }
+
+    COMPONENT_TYPES.forEach((componentType) => {
+      confirmedComponents[componentType] = false;
+    });
+    finalReviewState = null;
+    setMessage("Final itinerary rejected. All confirmations were cleared. Please choose options again. No purchases were made.");
+    renderItinerary();
   } catch (error) {
     setMessage(error.message || "Unexpected final confirmation error", true);
   }
+}
+
+function computeEstimatedCostSummary() {
+  const itinerary = currentPlan?.itinerary;
+  if (!itinerary?.components) return {};
+
+  const componentCost = (componentType) => {
+    const component = itinerary.components?.[componentType];
+    if (!component?.options?.length) return 0;
+    const selectedId = selectedOptionsByComponent[componentType] || component.recommendedOptionId || component.options[0]?.id;
+    const option = component.options.find((item) => item.id === selectedId) ?? component.options[0];
+    if (!option) return 0;
+
+    if (typeof option.costUsd === "number" && Number.isFinite(option.costUsd)) {
+      return option.costUsd;
+    }
+    if (typeof option.nightlyUsd === "number" && typeof option.nights === "number") {
+      return Number((option.nightlyUsd * option.nights).toFixed(2));
+    }
+    if (typeof option.dailyRateUsd === "number" && typeof option.rentalDays === "number") {
+      return Number((option.dailyRateUsd * option.rentalDays).toFixed(2));
+    }
+    return 0;
+  };
+
+  const flightUsd = componentCost("flight");
+  const hotelUsd = componentCost("hotel");
+  const carRentalUsd = componentCost("carRental");
+  const activitiesUsd = Array.isArray(itinerary.activities)
+    ? itinerary.activities.reduce((sum, activity) => sum + Number(activity.estimatedCostUsd || 0), 0)
+    : 0;
+
+  return {
+    flightUsd,
+    hotelUsd,
+    carRentalUsd,
+    activitiesUsd,
+    totalUsd: Number((flightUsd + hotelUsd + carRentalUsd + activitiesUsd).toFixed(2))
+  };
+}
+
+function updateCostSummary() {
+  const root = document.getElementById("cost-summary-root");
+  if (!root) return;
+  root.innerHTML = renderCostSummary(computeEstimatedCostSummary());
 }
 
 function renderSimpleList(items) {

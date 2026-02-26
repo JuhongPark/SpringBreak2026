@@ -6,6 +6,11 @@ Node + Express app that uses the latest `@openai/agents` SDK to plan a Spring Br
 
 We trust the system to plan well, so our core goal is to clearly visualize how the `@openai/agents` SDK and each agent actually operate.
 
+## Improvements
+
+- Enhanced visualization for agent and tool execution flows
+- Improved service UI for clearer planning and confirmation experience
+
 The app:
 
 - Collects user inputs for trip timing, length, departure city, destination, activities, weather preferences, air travel class (`economy` or `business`), and hotel class (`3`, `4`, `5` stars)

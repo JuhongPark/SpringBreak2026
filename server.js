@@ -238,6 +238,52 @@ app.post("/api/final-confirmation", (req, res) => {
   });
 });
 
+app.post("/api/reset-confirmations", (req, res) => {
+  const { itineraryId, componentType } = req.body ?? {};
+  if (!itineraryId) {
+    return res.status(400).json({ error: "itineraryId is required" });
+  }
+
+  const record = itineraryStore.get(itineraryId);
+  if (!record) {
+    return res.status(404).json({ error: "Itinerary not found" });
+  }
+
+  if (componentType) {
+    if (!TRIP_COMPONENTS.includes(componentType)) {
+      return res.status(400).json({
+        error: `componentType must be one of: ${TRIP_COMPONENTS.join(", ")}`
+      });
+    }
+    record.confirmations[componentType] = null;
+  } else {
+    for (const component of TRIP_COMPONENTS) {
+      record.confirmations[component] = null;
+    }
+  }
+
+  record.finalReview = null;
+  record.finalConfirmed = false;
+  record.finalConfirmationAt = null;
+
+  void traceStore.append(
+    normalizeTraceEvent(record.traceId, {
+      type: "confirmations_reset",
+      stage: "confirmation",
+      status: "info",
+      componentType: componentType ?? "all",
+      message: componentType ? `Confirmation reset for ${componentType}.` : "All confirmations reset."
+    })
+  );
+
+  res.json({
+    itineraryId,
+    confirmations: record.confirmations,
+    nextComponentToConfirm: nextComponentToConfirm(record.confirmations),
+    finalReview: null
+  });
+});
+
 app.get("/api/traces/:traceId", async (req, res) => {
   const { traceId } = req.params;
   if (!traceId) {
